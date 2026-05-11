@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <meta name="application-name" content="RoadTrip Planner">
-<meta name="description" content="Plan your road trips: POIs, routes, day-by-day itineraries, costs, GPS.">
+<meta name="description" content="Plan road trips: POIs, routes, day itineraries, costs, GPS.">
 <meta name="theme-color" content="#c94f14">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -20,12 +20,12 @@
   --border:#ddd7cc;--border2:#ccc5b8;
   --text:#18140f;--muted:#7a7060;--muted2:#9a9080;
   --acc:#c94f14;--acch:#a83d0f;--acc2:#d4920a;
-  --blue:#1d56d4;--green:#15803d;--red:#c81e1e;
-  --gold:#b8860b;
+  --blue:#1d56d4;--green:#15803d;--red:#c81e1e;--gold:#b8860b;
   --sh:0 2px 10px rgba(0,0,0,.07);--sh2:0 8px 30px rgba(0,0,0,.11);
   --r:10px;--rs:6px;--rl:14px;
   --font:'Nunito',sans-serif;--head:'Playfair Display',serif;
-  --pw:370px;--nh:60px;
+  --pw:340px; /* drawer width */
+  --tb:50px;  /* top bar height */
 }
 [data-theme=dark]{
   --bg:#0d0f15;--surf:#151a25;--surf2:#1b2030;--surf3:#222839;
@@ -35,52 +35,116 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text);transition:background .22s,color .22s;}
+
+/* ===== MAP always full screen ===== */
 #map{position:fixed;inset:0;z-index:0;}
-#sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--pw);background:var(--surf);border-right:1px solid var(--border);z-index:500;display:flex;flex-direction:column;box-shadow:var(--sh2);overflow:hidden;}
-#hdr{padding:11px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;}
-#hdr-r1{display:flex;align-items:center;gap:6px;margin-bottom:7px;}
-#hdr h1{font-family:var(--head);font-size:1.05rem;font-weight:900;flex:1;}
-#hdr h1 em{color:var(--acc);font-style:normal;}
-#hdr-ver{font-size:.52rem;color:var(--muted);font-weight:600;margin-left:2px;}
-.ib{width:29px;height:29px;border-radius:7px;border:1px solid var(--border);background:var(--surf2);color:var(--text);font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .14s;flex-shrink:0;}
-.ib:hover{background:var(--surf3);}
-.ib.on{background:var(--blue);border-color:var(--blue);color:#fff;}
-#tname{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:5px 9px;color:var(--text);font-family:var(--font);font-size:.79rem;font-weight:700;outline:none;transition:border-color .18s;}
+
+/* ===== TOP BAR ===== */
+#topbar{
+  position:fixed;top:0;left:0;right:0;z-index:600;height:var(--tb);
+  background:var(--surf);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:8px;padding:0 12px;
+  box-shadow:var(--sh);
+}
+#btn-drawer{width:38px;height:38px;border:1px solid var(--border);background:var(--surf2);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1.1rem;transition:all .14s;flex-shrink:0;}
+#btn-drawer:hover{background:var(--surf3);}
+#btn-drawer.open{background:var(--acc);border-color:var(--acc);color:#fff;}
+#topbar-title{font-family:var(--head);font-weight:900;font-size:1rem;flex:1;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;}
+#topbar-title em{color:var(--acc);font-style:normal;}
+#topbar-pills{display:flex;gap:4px;overflow:hidden;max-width:50%;}
+.tpill{background:var(--surf2);border:1px solid var(--border);border-radius:20px;padding:2px 7px;font-size:.59rem;font-weight:700;color:var(--muted2);white-space:nowrap;}
+.tpill b{color:var(--acc);}
+.tpill.gold b{color:var(--gold);}
+/* hide some pills on small screens */
+.tpill.hide-sm{display:none;}
+@media(min-width:480px){.tpill.hide-sm{display:block;}}
+#topbar-actions{display:flex;gap:5px;flex-shrink:0;}
+.tb-btn{width:34px;height:34px;border:1px solid var(--border);background:var(--surf2);border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.85rem;transition:all .14s;}
+.tb-btn:hover{background:var(--surf3);}
+.tb-btn.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+
+/* ===== DRAWER ===== */
+#drawer-backdrop{position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.35);display:none;backdrop-filter:blur(1px);}
+#drawer-backdrop.on{display:block;}
+#drawer{
+  position:fixed;top:0;left:0;bottom:0;z-index:800;
+  width:var(--pw);max-width:92vw;
+  background:var(--surf);
+  display:flex;flex-direction:column;overflow:hidden;
+  box-shadow:4px 0 32px rgba(0,0,0,.18);
+  transform:translateX(-100%);
+  transition:transform .28s cubic-bezier(.4,0,.2,1);
+}
+#drawer.open{transform:translateX(0);}
+/* drawer header */
+#dhdr{padding:10px 13px 8px;border-bottom:1px solid var(--border);flex-shrink:0;}
+#dhdr-r1{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+#dhdr h2{font-family:var(--head);font-size:1rem;font-weight:900;flex:1;}
+#dhdr h2 em{color:var(--acc);font-style:normal;}
+#dhdr-ver{font-size:.52rem;color:var(--muted);margin-left:2px;}
+.dib{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surf2);color:var(--text);font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .14s;flex-shrink:0;}
+.dib:hover{background:var(--surf3);}
+#tname{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:5px 9px;color:var(--text);font-family:var(--font);font-size:.78rem;font-weight:700;outline:none;transition:border-color .18s;}
 #tname:focus{border-color:var(--acc);}
-#hdr-st{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;}
-.pill{background:var(--surf2);border:1px solid var(--border);border-radius:20px;padding:2px 7px;font-size:.6rem;font-weight:700;color:var(--muted2);}
-.pill b{color:var(--acc);}
-.pill.gold{border-color:rgba(184,134,11,.4);background:rgba(184,134,11,.07);}
-.pill.gold b{color:var(--gold);}
+
+/* tabs */
 #tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
-.tab{flex:1;padding:7px 2px;font-size:.54rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .14s;white-space:nowrap;}
+.tab{flex:1;padding:7px 2px;font-size:.52rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .14s;white-space:nowrap;}
 .tab.on{color:var(--acc);border-color:var(--acc);}
+
+/* filter bar */
 #fbar{display:flex;gap:4px;padding:6px 9px;border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0;scrollbar-width:none;}
 #fbar::-webkit-scrollbar{display:none;}
-.fc{padding:3px 7px;border-radius:20px;font-size:.59rem;font-weight:700;cursor:pointer;border:1px solid var(--border2);color:var(--muted2);background:var(--surf2);transition:all .14s;white-space:nowrap;flex-shrink:0;}
+.fc{padding:3px 7px;border-radius:20px;font-size:.58rem;font-weight:700;cursor:pointer;border:1px solid var(--border2);color:var(--muted2);background:var(--surf2);transition:all .14s;white-space:nowrap;flex-shrink:0;}
 .fc.on{background:var(--acc);border-color:var(--acc);color:#fff;}
+
+/* panels */
 .panel{display:none;flex:1;flex-direction:column;overflow:hidden;}
 .panel.on{display:flex;}
 .pbd{flex:1;overflow-y:auto;padding:10px;scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+
+/* ===== MAP overlays ===== */
+#map-tb{position:fixed;top:calc(var(--tb) + 8px);right:10px;z-index:400;display:flex;flex-direction:column;gap:5px;}
+.mib{width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--surf);color:var(--text);font-size:.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .14s;box-shadow:var(--sh);}
+.mib:hover{background:var(--surf2);}
+.mib.on{background:var(--blue);border-color:var(--blue);color:#fff;}
+#gbadge{position:fixed;top:calc(var(--tb) + 8px);left:50%;transform:translateX(-50%);z-index:400;background:var(--surf);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:.68rem;font-weight:700;display:none;align-items:center;gap:6px;box-shadow:var(--sh);white-space:nowrap;}
+#gbadge.on{display:flex;}
+
+/* FAB for POI placement */
+#fab{position:fixed;bottom:22px;right:14px;z-index:500;width:48px;height:48px;border-radius:50%;background:var(--acc);color:#fff;border:none;font-size:1.3rem;cursor:pointer;box-shadow:0 4px 16px rgba(201,79,20,.4);display:flex;align-items:center;justify-content:center;transition:transform .18s,background .18s;}
+#fab:hover{transform:scale(1.07);}
+#fab.cancel{background:var(--text);}
+
+/* ===== TOAST ===== */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:4px;align-items:center;pointer-events:none;}
+.tmsg{background:var(--surf);border:1px solid var(--border);border-radius:var(--rs);padding:7px 14px;font-size:.72rem;animation:tsl .27s ease;display:flex;align-items:center;gap:5px;box-shadow:var(--sh2);white-space:nowrap;}
+.tmsg.ok{border-color:var(--green);}.tmsg.err{border-color:var(--red);}
+@keyframes tsl{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ===== FORMS ===== */
 .inp{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:6px 9px;color:var(--text);font-size:.79rem;font-family:var(--font);outline:none;transition:border-color .18s;}
 .inp:focus{border-color:var(--acc);}
 .inp::placeholder{color:var(--muted);}
 select.inp{cursor:pointer;}
 textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
-.lbl{font-size:.59rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);display:block;margin-bottom:3px;}
+.lbl{font-size:.58rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);display:block;margin-bottom:3px;}
 .fld{margin-bottom:7px;}
 .fr2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:7px;}
 .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:7px;}
-.btn{border:none;border-radius:var(--rs);padding:6px 11px;font-size:.71rem;font-weight:700;cursor:pointer;transition:all .14s;font-family:var(--font);display:inline-flex;align-items:center;gap:5px;}
+
+/* ===== BUTTONS ===== */
+.btn{border:none;border-radius:var(--rs);padding:6px 11px;font-size:.71rem;font-weight:700;cursor:pointer;transition:all .14s;font-family:var(--font);display:inline-flex;align-items:center;gap:4px;}
 .ba{background:var(--acc);color:#fff;}.ba:hover{background:var(--acch);}
 .bg{background:var(--surf2);color:var(--text);border:1px solid var(--border);}.bg:hover{background:var(--surf3);}
 .br{background:rgba(200,30,30,.1);color:var(--red);border:1px solid rgba(200,30,30,.22);}.br:hover{background:rgba(200,30,30,.18);}
 .bb{background:var(--blue);color:#fff;}.bb:hover{filter:brightness(.9);}
 .bgr{background:var(--green);color:#fff;}.bgr:hover{filter:brightness(.9);}
-.bgold{background:rgba(184,134,11,.12);color:var(--gold);border:1px solid rgba(184,134,11,.3);}.bgold:hover{background:rgba(184,134,11,.2);}
 .bsm{padding:3px 7px;font-size:.65rem;}
 .bic{width:25px;height:25px;padding:0;justify-content:center;border-radius:5px;font-size:.78rem;}
 .bfw{width:100%;justify-content:center;}
+
+/* ===== SECTION ===== */
 .sec{font-size:.57rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:11px 0 5px;display:flex;align-items:center;gap:5px;}
 .sec:first-child{margin-top:0;}
 .sl{flex:1;height:1px;background:var(--border);}
@@ -90,78 +154,82 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .sri{padding:7px 10px;cursor:pointer;font-size:.75rem;border-bottom:1px solid var(--border);transition:background .1s;}
 .sri:last-child{border:none;}.sri:hover{background:var(--surf2);}
 .sri b{display:block;font-weight:700;}.sri span{font-size:.63rem;color:var(--muted);}
+
+/* ===== PHOTOS ===== */
 .poi-photos{display:flex;gap:5px;margin-top:4px;overflow:hidden;}
 .poi-photo{width:52px;height:39px;border-radius:5px;object-fit:cover;border:1px solid var(--border);}
 .pop-photos{display:flex;gap:5px;margin:5px 0;}
 .pop-photo{width:60px;height:45px;border-radius:6px;object-fit:cover;}
+
+/* ===== POI CARDS ===== */
 .poic{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:4px;display:flex;align-items:flex-start;gap:6px;cursor:pointer;transition:border-color .14s,box-shadow .14s;}
 .poic:hover{border-color:var(--border2);box-shadow:var(--sh);}
 .ppin{width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;}
 .pbody{flex:1;min-width:0;}
 .pname{font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .pmeta{font-size:.63rem;color:var(--muted);margin-top:2px;display:flex;gap:5px;flex-wrap:wrap;}
-.pcost{font-size:.63rem;font-weight:700;color:var(--gold);display:flex;align-items:center;gap:2px;}
+.pcost{font-size:.62rem;font-weight:700;color:var(--gold);}
 .ptags{display:flex;gap:3px;margin-top:3px;flex-wrap:wrap;}
 .tag{font-size:.56rem;font-weight:700;padding:2px 5px;border-radius:10px;background:var(--surf3);border:1px solid var(--border2);color:var(--muted2);}
 .pacts{display:flex;gap:2px;flex-shrink:0;}
 
-/* ---- Finance config box ---- */
-.finance-box{background:rgba(184,134,11,.06);border:1px solid rgba(184,134,11,.2);border-radius:var(--r);padding:11px;margin-bottom:10px;}
-.finance-box summary{font-size:.7rem;font-weight:800;color:var(--gold);cursor:pointer;display:flex;align-items:center;gap:6px;list-style:none;outline:none;}
-.finance-box summary::before{content:'⛽';font-size:.9rem;}
-.finance-inner{padding-top:10px;}
-.finance-total{background:rgba(184,134,11,.1);border:1px solid rgba(184,134,11,.22);border-radius:var(--rs);padding:7px 10px;margin-top:8px;font-size:.75rem;font-weight:700;color:var(--gold);display:flex;justify-content:space-between;align-items:center;}
+/* ===== FINANCE BOX ===== */
+.finance-box{background:rgba(184,134,11,.06);border:1px solid rgba(184,134,11,.2);border-radius:var(--r);padding:10px;margin-bottom:9px;}
+.finance-box summary{font-size:.69rem;font-weight:800;color:var(--gold);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;outline:none;}
+.finance-box summary::before{content:'⛽';}
+.finance-inner{padding-top:9px;}
+.finance-total{background:rgba(184,134,11,.1);border:1px solid rgba(184,134,11,.22);border-radius:var(--rs);padding:6px 9px;margin-top:7px;font-size:.74rem;font-weight:700;color:var(--gold);display:flex;justify-content:space-between;align-items:center;}
 
-/* ---- Cost badge on route card ---- */
-.cost-chip{display:inline-flex;align-items:center;gap:3px;background:rgba(184,134,11,.1);border:1px solid rgba(184,134,11,.25);border-radius:20px;padding:2px 7px;font-size:.65rem;font-weight:700;color:var(--gold);}
-
-/* ---- Day cards ---- */
+/* ===== DAY CARDS ===== */
 .dayc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:7px;overflow:hidden;}
 .dayc.dover{border-color:var(--acc2);background:rgba(212,146,10,.05);}
 .dayh{display:flex;align-items:center;gap:5px;padding:7px 10px;background:var(--surf3);border-bottom:1px solid var(--border);}
 .dayn{font-family:var(--head);font-weight:900;font-size:.9rem;color:var(--acc2);min-width:18px;}
-.dayti{flex:1;background:transparent;border:none;color:var(--text);font-family:var(--font);font-size:.76rem;font-weight:700;outline:none;}
+.dayti{flex:1;background:transparent;border:none;color:var(--text);font-family:var(--font);font-size:.75rem;font-weight:700;outline:none;}
 .daydi{background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--muted);font-family:var(--font);font-size:.63rem;outline:none;width:88px;text-align:right;}
 .daydi:focus{border-color:var(--acc2);}
 .dayst{display:flex;gap:6px;padding:3px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
-.daystat{font-size:.63rem;color:var(--muted);display:flex;align-items:center;gap:2px;}
+.daystat{font-size:.62rem;color:var(--muted);display:flex;align-items:center;gap:2px;}
 .daystat b{color:var(--text);font-weight:700;}
 .daystat.gold b{color:var(--gold);}
 .dayb{padding:5px;}
-.day-item{background:var(--surf);border:1px solid var(--border);border-radius:var(--rs);padding:4px 7px;margin-bottom:3px;display:flex;align-items:center;gap:4px;cursor:grab;user-select:none;font-size:.72rem;}
+.day-item{background:var(--surf);border:1px solid var(--border);border-radius:var(--rs);padding:4px 7px;margin-bottom:3px;display:flex;align-items:center;gap:4px;cursor:grab;user-select:none;font-size:.71rem;}
 .day-item:hover{border-color:var(--border2);}
 .day-item.dragging{opacity:.3;border-style:dashed;}
 .dipin{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;}
 .diname{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.di-cost{font-size:.63rem;font-weight:700;color:var(--gold);flex-shrink:0;}
-.di-grip{color:var(--muted2);font-size:.72rem;flex-shrink:0;cursor:grab;}
-.ndi{background:rgba(212,146,10,.07);border:1px solid rgba(212,146,10,.15);border-radius:var(--rs);padding:4px 7px;margin-bottom:3px;}
+.di-cost{font-size:.62rem;font-weight:700;color:var(--gold);flex-shrink:0;}
+.di-grip{color:var(--muted2);font-size:.7rem;flex-shrink:0;}
+.ndi{background:rgba(212,146,10,.06);border:1px solid rgba(212,146,10,.15);border-radius:var(--rs);padding:4px 7px;margin-bottom:3px;}
 .ndi textarea{background:transparent;border:none;color:var(--text);font-family:var(--font);font-size:.68rem;width:100%;outline:none;resize:none;line-height:1.5;}
 .dayacts{display:flex;gap:3px;padding:4px 5px;border-top:1px solid var(--border);flex-wrap:wrap;}
 .empty-day{font-size:.7rem;color:var(--muted);padding:7px;text-align:center;border:1.5px dashed var(--border2);border-radius:var(--rs);margin-bottom:3px;}
 .day-dropzone{height:5px;border-radius:3px;margin-bottom:2px;transition:all .12s;}
 .day-dropzone.over{height:18px;background:rgba(201,79,20,.1);border:1.5px dashed var(--acc);}
-/* Day cost summary */
-.day-cost-summary{background:rgba(184,134,11,.07);border:1px solid rgba(184,134,11,.18);border-radius:var(--rs);padding:6px 9px;margin:3px 0 5px;}
-.dcs-row{display:flex;justify-content:space-between;align-items:center;font-size:.65rem;padding:1px 0;}
-.dcs-row.total{font-weight:800;font-size:.72rem;color:var(--gold);border-top:1px solid rgba(184,134,11,.2);margin-top:3px;padding-top:4px;}
+.day-cost-summary{background:rgba(184,134,11,.07);border:1px solid rgba(184,134,11,.18);border-radius:var(--rs);padding:5px 8px;margin:3px 0 4px;}
+.dcs-row{display:flex;justify-content:space-between;font-size:.64rem;padding:1px 0;}
+.dcs-row.total{font-weight:800;font-size:.7rem;color:var(--gold);border-top:1px solid rgba(184,134,11,.2);margin-top:3px;padding-top:3px;}
 .dcs-row span:first-child{color:var(--muted);}
 .dcs-row span:last-child{font-weight:700;color:var(--text);}
 .dcs-row.total span:last-child{color:var(--gold);}
 
-.rtc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:5px;}
+/* ===== ROUTE CARD ===== */
+.rtc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:4px;}
 .rth{display:flex;align-items:center;gap:5px;margin-bottom:4px;}
-.rnum{background:var(--blue);color:#fff;font-size:.56rem;font-weight:800;padding:2px 5px;border-radius:4px;}
-.rname{font-size:.76rem;font-weight:700;flex:1;}
-.rmeta{display:flex;gap:6px;font-size:.65rem;color:var(--muted);flex-wrap:wrap;}
+.rnum{background:var(--blue);color:#fff;font-size:.55rem;font-weight:800;padding:2px 5px;border-radius:4px;}
+.rname{font-size:.75rem;font-weight:700;flex:1;}
+.rmeta{display:flex;gap:6px;font-size:.64rem;color:var(--muted);flex-wrap:wrap;}
 .rmeta b{color:var(--text);font-weight:700;}
+.cost-chip{display:inline-flex;align-items:center;gap:3px;background:rgba(184,134,11,.1);border:1px solid rgba(184,134,11,.25);border-radius:20px;padding:2px 6px;font-size:.63rem;font-weight:700;color:var(--gold);}
+
+/* ===== GPS ===== */
 .gbar{display:flex;align-items:center;gap:8px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:9px;margin-bottom:7px;}
 .gdot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .28s;}
 .gdot.on{background:var(--green);box-shadow:0 0 7px var(--green);animation:gpa 1.5s infinite;}
 @keyframes gpa{0%,100%{opacity:1}50%{opacity:.28}}
-.tog-row{display:flex;align-items:center;gap:10px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:7px 10px;margin-bottom:6px;}
-.tog-label{flex:1;font-size:.74rem;font-weight:700;}
-.tog-sub{font-size:.62rem;color:var(--muted);margin-top:1px;}
+.tog-row{display:flex;align-items:center;gap:9px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:7px 10px;margin-bottom:6px;}
+.tog-label{flex:1;font-size:.73rem;font-weight:700;}
+.tog-sub{font-size:.61rem;color:var(--muted);margin-top:1px;}
 .tog{width:36px;height:20px;border-radius:10px;background:var(--border2);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;border:none;}
 .tog.on{background:var(--acc);}
 .tog::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
@@ -169,100 +237,109 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .nri{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:6px 9px;margin-bottom:3px;display:flex;align-items:center;gap:6px;}
 .nrr{font-family:var(--head);font-weight:900;font-size:.88rem;color:var(--muted);width:15px;flex-shrink:0;}
 .nrr.cl{color:var(--acc2);}
+
+/* ===== SAVE ===== */
 .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;}
 .sc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:10px;}
-.sv{font-family:var(--head);font-weight:900;font-size:1.25rem;color:var(--acc);}
+.sv{font-family:var(--head);font-weight:900;font-size:1.2rem;color:var(--acc);}
 .sv.gold{color:var(--gold);}
 .sk{font-size:.57rem;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.06em;}
-.gdpanel{background:rgba(29,86,212,.06);border:1px solid rgba(29,86,212,.2);border-radius:var(--r);padding:10px;margin-bottom:9px;}
-.gdpanel h3{font-size:.78rem;font-weight:800;color:var(--blue);margin-bottom:5px;}
+.gdpanel{background:rgba(29,86,212,.06);border:1px solid rgba(29,86,212,.2);border-radius:var(--r);padding:10px;margin-bottom:8px;}
+.gdpanel h3{font-size:.77rem;font-weight:800;color:var(--blue);margin-bottom:5px;}
 .gd-user-row{display:flex;align-items:center;gap:7px;padding:7px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:6px;}
 .gd-av{width:26px;height:26px;border-radius:50%;background:var(--acc);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:.72rem;flex-shrink:0;overflow:hidden;}
 .gdrive-file{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surf);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:3px;cursor:pointer;transition:border-color .14s;}
 .gdrive-file:hover{border-color:var(--blue);}
 .gdrive-file-name{flex:1;font-size:.72rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .gdrive-file-date{font-size:.59rem;color:var(--muted);}
-.gd-setup ol{font-size:.64rem;color:var(--muted);line-height:1.8;padding-left:14px;}
-.gd-setup code{background:var(--surf3);border:1px solid var(--border2);border-radius:3px;padding:1px 4px;font-size:.62rem;font-family:monospace;}
-#mtb{position:fixed;top:12px;right:12px;z-index:400;display:flex;flex-direction:column;gap:5px;}
-#gbadge{position:fixed;top:11px;left:50%;transform:translateX(-50%);z-index:400;background:var(--surf);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:.68rem;font-weight:700;display:none;align-items:center;gap:6px;box-shadow:var(--sh);white-space:nowrap;}
-#gbadge.on{display:flex;}
-#fab{position:fixed;bottom:68px;right:16px;z-index:600;width:50px;height:50px;border-radius:50%;background:var(--acc);color:#fff;border:none;font-size:1.35rem;cursor:pointer;box-shadow:0 4px 16px rgba(201,79,20,.38);display:none;align-items:center;justify-content:center;transition:transform .18s;}
-#fab:hover{transform:scale(1.07);}
-#bnav{position:fixed;bottom:0;left:0;right:0;z-index:600;background:var(--surf);border-top:1px solid var(--border);display:none;height:var(--nh);box-shadow:0 -3px 14px rgba(0,0,0,.07);}
-.bni{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--muted);font-size:.54rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border:none;background:transparent;height:100%;transition:color .14s;}
-.bni .bi2{font-size:1.1rem;}
-.bni.on{color:var(--acc);}
-#sbk{position:fixed;inset:0;z-index:700;background:rgba(0,0,0,.4);display:none;backdrop-filter:blur(2px);}
-#sbk.on{display:block;}
-#sheet{position:fixed;left:0;right:0;bottom:0;z-index:800;background:var(--surf);border-radius:18px 18px 0 0;box-shadow:0 -8px 36px rgba(0,0,0,.13);max-height:88vh;transform:translateY(100%);transition:transform .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;overflow:hidden;}
-#sheet.on{transform:translateY(0);}
-#sh-hnd{width:38px;height:4px;background:var(--border2);border-radius:2px;margin:10px auto 7px;flex-shrink:0;}
-#sh-ttl{font-family:var(--head);font-weight:900;font-size:.93rem;padding:0 15px 8px;border-bottom:1px solid var(--border);flex-shrink:0;}
-#sh-body{flex:1;overflow-y:auto;padding:10px 14px 22px;}
-#mbk,#rmbk{position:fixed;inset:0;background:rgba(0,0,0,.58);z-index:900;display:none;align-items:center;justify-content:center;backdrop-filter:blur(5px);padding:13px;}
+.gd-setup ol{font-size:.63rem;color:var(--muted);line-height:1.8;padding-left:14px;}
+.gd-setup code{background:var(--surf3);border:1px solid var(--border2);border-radius:3px;padding:1px 4px;font-size:.61rem;font-family:monospace;}
+
+/* ===== MODAL ===== */
+#mbk,#rmbk{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:13px;}
 #mbk.on,#rmbk.on{display:flex;}
 #modal,#rmodal{background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:18px;width:100%;max-width:440px;max-height:92vh;overflow-y:auto;scrollbar-width:thin;box-shadow:var(--sh2);}
-#modal h2,#rmodal h2{font-family:var(--head);font-weight:900;font-size:.95rem;margin-bottom:12px;display:flex;align-items:center;gap:7px;}
-.mfoot{display:flex;gap:6px;margin-top:12px;justify-content:flex-end;}
+#modal h2,#rmodal h2{font-family:var(--head);font-weight:900;font-size:.94rem;margin-bottom:11px;display:flex;align-items:center;gap:7px;}
+.mfoot{display:flex;gap:6px;margin-top:11px;justify-content:flex-end;}
 .crow{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;}
 .csw{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2.5px solid transparent;transition:all .13s;}
 .csw.on{border-color:var(--text);transform:scale(1.22);}
 .lrow{display:flex;gap:4px;margin-bottom:4px;}
 .lchip{display:inline-flex;align-items:center;gap:3px;background:rgba(29,86,212,.08);border:1px solid rgba(29,86,212,.18);border-radius:20px;padding:2px 7px;font-size:.62rem;color:var(--blue);text-decoration:none;}
 .lchip:hover{background:rgba(29,86,212,.14);}
-#toast{position:fixed;bottom:70px;right:13px;z-index:9999;display:flex;flex-direction:column;gap:4px;}
-.tmsg{background:var(--surf);border:1px solid var(--border);border-radius:var(--rs);padding:7px 12px;font-size:.71rem;animation:tsl .27s ease;max-width:255px;display:flex;align-items:center;gap:5px;box-shadow:var(--sh);}
-.tmsg.ok{border-color:var(--green);}.tmsg.err{border-color:var(--red);}
-@keyframes tsl{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+/* ===== Leaflet popup ===== */
 .leaflet-popup-content-wrapper{background:var(--surf);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);box-shadow:var(--sh2);}
 .leaflet-popup-tip{background:var(--surf);}
-.leaflet-popup-content{margin:10px 13px;}
+.leaflet-popup-content{margin:10px 12px;}
 .pt{font-family:var(--head);font-weight:700;font-size:.86rem;margin-bottom:4px;}
 .pd{font-size:.69rem;color:var(--muted);margin-bottom:3px;white-space:pre-wrap;line-height:1.5;}
 .pr{font-size:.67rem;color:var(--muted2);margin-bottom:2px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;}
-.pa{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap;}
+.pa{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap;}
 .leaflet-control-attribution{background:rgba(255,255,255,.85)!important;}
 [data-theme=dark] .leaflet-control-attribution{background:rgba(13,15,21,.82)!important;color:var(--muted)!important;}
-@media(max-width:768px){#sidebar{display:none!important;}#mtb{top:auto;bottom:68px;right:11px;}#fab{display:flex;}#bnav{display:flex;}#toast{bottom:65px;}}
-@media(min-width:769px){#fab,#bnav,#sbk,#sheet{display:none!important;}#sidebar{display:flex!important;}}
-*{scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+
+/* make room for topbar */
+.leaflet-top{top:calc(var(--tb) + 8px)!important;}
 </style>
 </head>
 <body>
 <div id="map"></div>
+
+<!-- GPS live badge -->
 <div id="gbadge"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:gpa 1.5s infinite;flex-shrink:0;display:block;"></span><span id="gbt">GPS</span></div>
-<div id="mtb">
-  <button class="ib" id="t-theme">☀️</button>
-  <button class="ib" id="t-home">🏠</button>
-  <button class="ib" id="t-sat">🛰️</button>
-  <button class="ib" id="t-gpsq">📍</button>
+
+<!-- Map right toolbar -->
+<div id="map-tb">
+  <button class="mib" id="t-theme" title="Toggle theme">☀️</button>
+  <button class="mib" id="t-home" title="Fit all">🏠</button>
+  <button class="mib" id="t-sat" title="Satellite">🛰️</button>
+  <button class="mib" id="t-gpsq" title="My location">📍</button>
 </div>
 
-<div id="sidebar">
-  <div id="hdr">
-    <div id="hdr-r1">
-      <h1>Road<em>Trip</em><span id="hdr-ver">v7</span></h1>
-      <button class="ib" id="t-theme2">☀️</button>
-      <button class="ib" id="btn-savh">💾</button>
-      <button class="ib" id="btn-lodh">📂</button>
+<!-- FAB -->
+<button id="fab" title="Add POI">＋</button>
+
+<!-- TOP BAR (always visible) -->
+<div id="topbar">
+  <button id="btn-drawer" onclick="toggleDrawer()">☰</button>
+  <div id="topbar-title">Road<em>Trip</em></div>
+  <div id="topbar-pills">
+    <div class="tpill">📍 <b id="hp">0</b></div>
+    <div class="tpill hide-sm">🛣️ <b id="hr">0</b> <b id="hkm" style="color:var(--muted);">0km</b></div>
+    <div class="tpill hide-sm">📅 <b id="hd">0</b></div>
+    <div class="tpill gold">💰$<b id="htotal">0</b></div>
+  </div>
+  <div id="topbar-actions">
+    <button class="tb-btn" id="btn-savh" title="Save">💾</button>
+    <button class="tb-btn" id="btn-lodh" title="Load">📂</button>
+  </div>
+</div>
+
+<!-- DRAWER BACKDROP -->
+<div id="drawer-backdrop" onclick="closeDrawer()"></div>
+
+<!-- DRAWER -->
+<div id="drawer">
+  <div id="dhdr">
+    <div id="dhdr-r1">
+      <h2>Road<em>Trip</em><span id="dhdr-ver">v8</span></h2>
+      <button class="dib" id="t-theme2">☀️</button>
+      <button class="dib" id="btn-savh2" title="Save">💾</button>
+      <button class="dib" id="btn-lodh2" title="Load">📂</button>
+      <button class="dib" onclick="closeDrawer()" title="Close" style="margin-left:2px;">✕</button>
     </div>
     <input id="tname" type="text" placeholder="Trip name..." value="My Road Trip">
-    <div id="hdr-st">
-      <div class="pill">📍 <b id="hp">0</b></div>
-      <div class="pill">🛣️ <b id="hr">0</b></div>
-      <div class="pill">📅 <b id="hd">0</b></div>
-      <div class="pill">🗺️ <b id="hkm">0</b> km</div>
-      <div class="pill gold">💰 $<b id="htotal">0</b></div>
-    </div>
   </div>
+
   <div id="tabs">
-    <div class="tab on" data-tab="pois">📍 POIs</div>
-    <div class="tab" data-tab="days">📅 Days</div>
-    <div class="tab" data-tab="routes">🛣️ Routes</div>
-    <div class="tab" data-tab="gps">🧭 GPS</div>
-    <div class="tab" data-tab="save">☁️ Save</div>
+    <div class="tab on" data-tab="pois">📍</div>
+    <div class="tab" data-tab="days">📅</div>
+    <div class="tab" data-tab="routes">🛣️</div>
+    <div class="tab" data-tab="gps">🧭</div>
+    <div class="tab" data-tab="save">☁️</div>
   </div>
+
   <div id="fbar">
     <div class="fc on" data-cat="all">All</div>
     <div class="fc" data-cat="hotel">🏨</div>
@@ -294,8 +371,8 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 
   <!-- Days -->
   <div class="panel" id="panel-days">
-    <div style="padding:8px 10px;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-shrink:0;">
-      <button class="btn ba bsm" id="btn-addd" style="flex:1;justify-content:center;">+ Add Day</button>
+    <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <button class="btn ba bsm bfw" id="btn-addd">+ Add Day</button>
     </div>
     <div class="pbd" id="day-list"></div>
   </div>
@@ -303,20 +380,18 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
   <!-- Routes -->
   <div class="panel" id="panel-routes">
     <div class="pbd">
-      <!-- Finance config -->
       <details class="finance-box" id="finance-details">
         <summary>Fuel &amp; Cost Settings</summary>
         <div class="finance-inner">
           <div class="fr2">
-            <div><label class="lbl">Consumption (L/100km)</label><input class="inp" id="f-consump" type="number" min="0" step=".1" value="7" placeholder="7"></div>
-            <div><label class="lbl">Fuel price ($/L)</label><input class="inp" id="f-price" type="number" min="0" step=".01" value="1.70" placeholder="1.70"></div>
+            <div><label class="lbl">Consumption (L/100km)</label><input class="inp" id="f-consump" type="number" min="0" step=".1" value="7"></div>
+            <div><label class="lbl">Fuel price ($/L)</label><input class="inp" id="f-price" type="number" min="0" step=".01" value="1.70"></div>
           </div>
-          <div style="font-size:.67rem;color:var(--muted);line-height:1.6;">Fuel cost is calculated for 🚗 Car routes only. Other modes use their fixed cost only.</div>
+          <div style="font-size:.65rem;color:var(--muted);line-height:1.6;">Fuel cost applies to 🚗 Car routes only.</div>
           <div class="finance-total" id="finance-total-rt">Total trip cost: <b>$0.00</b></div>
         </div>
       </details>
-      <!-- New route form -->
-      <div style="background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:10px;margin-bottom:10px;">
+      <div style="background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:10px;margin-bottom:9px;">
         <div class="sec" style="margin-top:0;">New Route</div>
         <div class="fld"><label class="lbl">From</label><select class="inp" id="rf"></select></div>
         <div class="fld"><label class="lbl">To</label><select class="inp" id="rt"></select></div>
@@ -326,14 +401,14 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
               <option value="car">🚗 Car</option>
               <option value="foot">🚶 Walk</option>
               <option value="bike">🚲 Bike</option>
-              <option value="manual">✏️ Manual (straight line)</option>
+              <option value="manual">✏️ Manual (straight)</option>
             </select>
           </div>
           <div><label class="lbl">Day</label><select class="inp" id="rd"></select></div>
         </div>
         <div class="fr2">
-          <div><label class="lbl">Fixed cost ($) <span style="font-weight:400;color:var(--muted);">optional</span></label><input class="inp" id="r-cost" type="number" min="0" step=".01" placeholder="0.00"></div>
-          <div><label class="lbl">Manual distance (km) <span style="font-weight:400;color:var(--muted);">if manual</span></label><input class="inp" id="r-manual-dist" type="number" min="0" step=".1" placeholder="—"></div>
+          <div><label class="lbl">Fixed cost ($)</label><input class="inp" id="r-cost" type="number" min="0" step=".01" placeholder="0.00"></div>
+          <div><label class="lbl">Manual dist. (km)</label><input class="inp" id="r-manual-dist" type="number" min="0" step=".1" placeholder="auto"></div>
         </div>
         <button class="btn bb bfw" id="btn-calc">Calculate Route →</button>
       </div>
@@ -347,17 +422,17 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
     <div class="pbd">
       <div class="gbar">
         <div class="gdot" id="gdot"></div>
-        <div style="flex:1;"><div id="glbl" style="font-size:.79rem;font-weight:700;">GPS inactive</div><div id="gsub" style="font-size:.63rem;color:var(--muted);margin-top:1px;">Enable to track your location</div></div>
+        <div style="flex:1;"><div id="glbl" style="font-size:.79rem;font-weight:700;">GPS inactive</div><div id="gsub" style="font-size:.63rem;color:var(--muted);margin-top:1px;">Enable to track location</div></div>
       </div>
       <div style="display:flex;gap:5px;margin-bottom:9px;">
         <button class="btn bgr bsm" id="btn-gon" style="flex:1;justify-content:center;">▶ Start GPS</button>
         <button class="btn br bic bsm" id="btn-goff" disabled>■</button>
       </div>
       <div class="tog-row">
-        <div><div class="tog-label">🧲 Draw Close POIs</div><div class="tog-sub">Lines to POIs within 50 km from your position</div></div>
+        <div><div class="tog-label">🧲 Draw Close POIs</div><div class="tog-sub">Lines to POIs within 50 km</div></div>
         <button class="tog" id="tog-lines" onclick="togglePoiLines()"></button>
       </div>
-      <div style="font-size:.69rem;color:var(--muted);margin-bottom:9px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:8px;line-height:1.65;">📱 <b>Mobile tip:</b> Use alongside Google Maps in split screen. Location and nearby POIs update live.</div>
+      <div style="font-size:.68rem;color:var(--muted);margin-bottom:9px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:8px;line-height:1.65;">📱 <b>Tip:</b> Keep this app alongside Google Maps. Location and nearby POIs update live.</div>
       <div class="sec" style="margin-top:0;"><span>Nearby POIs</span><span class="sl"></span></div>
       <div id="nearby"></div>
     </div>
@@ -377,14 +452,14 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
       <div class="gdpanel">
         <h3>☁️ Google Drive</h3>
         <div id="gd-out">
-          <p style="font-size:.69rem;color:var(--muted);margin-bottom:7px;line-height:1.65;">Sign in with <b>your Google account</b> to save trips to your Drive in a <code style="background:var(--surf3);padding:1px 4px;border-radius:3px;font-size:.63rem;">RoadTripPlanner</code> folder.</p>
+          <p style="font-size:.68rem;color:var(--muted);margin-bottom:7px;line-height:1.65;">Sign in with <b>your Google account</b> to save trips in your Drive (<code style="background:var(--surf3);padding:1px 4px;border-radius:3px;font-size:.62rem;">RoadTripPlanner</code> folder).</p>
           <button class="btn bb bfw" id="btn-gsign" style="margin-bottom:7px;">Sign in with Google</button>
-          <details><summary style="font-size:.64rem;color:var(--muted);cursor:pointer;font-weight:700;">⚙️ Developer setup (one-time)</summary>
+          <details><summary style="font-size:.63rem;color:var(--muted);cursor:pointer;font-weight:700;">⚙️ Developer setup</summary>
           <div style="background:rgba(212,146,10,.06);border:1px solid rgba(212,146,10,.18);border-radius:var(--rs);padding:8px;margin-top:5px;" class="gd-setup">
-            <p style="font-size:.64rem;color:var(--muted);margin-bottom:4px;line-height:1.6;">Client ID identifies <b>this app</b> — users log in with their own accounts. Free.</p>
+            <p style="font-size:.63rem;color:var(--muted);margin-bottom:4px;line-height:1.6;">Client ID identifies the <b>app</b> — each user logs in with their own account. Free.</p>
             <ol>
               <li>console.cloud.google.com → New project</li>
-              <li>Enable <b>Google Drive API</b> + <b>Google Identity API</b></li>
+              <li>Enable <b>Google Drive API</b> + <b>Identity API</b></li>
               <li>Credentials → OAuth 2.0 Web Client → HTTPS domain</li>
               <li>Replace <code>YOUR_CLIENT_ID</code> in script config</li>
               <li>Host on HTTPS (GitHub Pages / Netlify = free)</li>
@@ -394,7 +469,7 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
         <div id="gd-in" style="display:none;">
           <div class="gd-user-row">
             <div class="gd-av" id="gd-av">?</div>
-            <div style="flex:1;min-width:0;"><div id="gd-name" style="font-size:.75rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div><div id="gd-email" style="font-size:.61rem;color:var(--muted);"></div></div>
+            <div style="flex:1;min-width:0;"><div id="gd-name" style="font-size:.74rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div><div id="gd-email" style="font-size:.61rem;color:var(--muted);"></div></div>
             <button class="btn bg bsm" id="btn-gsout">Sign out</button>
           </div>
           <div style="display:flex;gap:5px;margin-bottom:7px;">
@@ -413,24 +488,13 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
       </div>
     </div>
   </div>
-</div>
-
-<!-- Mobile nav -->
-<div id="bnav" style="display:none;">
-  <button class="bni on" data-sh="pois"><span class="bi2">📍</span>POIs</button>
-  <button class="bni" data-sh="days"><span class="bi2">📅</span>Days</button>
-  <button class="bni" data-sh="gps"><span class="bi2">🧭</span>GPS</button>
-  <button class="bni" data-sh="save"><span class="bi2">☁️</span>Save</button>
-</div>
-<button id="fab">＋</button>
-<div id="sbk"></div>
-<div id="sheet"><div id="sh-hnd"></div><div id="sh-ttl"></div><div id="sh-body"></div></div>
+</div><!-- /drawer -->
 
 <!-- POI Modal -->
 <div id="mbk"><div id="modal">
   <h2><span id="m-ico">📍</span><span id="m-hd">New POI</span></h2>
   <div class="fld"><label class="lbl">Name *</label><input class="inp" id="m-name" type="text" placeholder="Place name..."></div>
-  <div class="fld"><label class="lbl">Notes / Description</label><textarea class="inp" id="m-desc" rows="3" placeholder="Opening hours, tips..."></textarea></div>
+  <div class="fld"><label class="lbl">Notes</label><textarea class="inp" id="m-desc" rows="3" placeholder="Opening hours, tips..."></textarea></div>
   <div class="fr2">
     <div><label class="lbl">Category</label>
       <select class="inp" id="m-cat">
@@ -449,7 +513,7 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
   </div>
   <div class="fr2">
     <div><label class="lbl">Assign to Day</label><select class="inp" id="m-day"><option value="">— Not assigned —</option></select></div>
-    <div><label class="lbl">Cost ($) <span style="font-weight:400;color:var(--muted);">optional</span></label><input class="inp" id="m-cost" type="number" min="0" step=".01" placeholder="0.00"></div>
+    <div><label class="lbl">Cost ($)</label><input class="inp" id="m-cost" type="number" min="0" step=".01" placeholder="0.00"></div>
   </div>
   <div class="fld"><label class="lbl">Color</label>
     <div class="crow">
@@ -479,17 +543,15 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
   <div class="fr2">
     <div><label class="lbl">Mode</label>
       <select class="inp" id="rem">
-        <option value="car">🚗 Car</option>
-        <option value="foot">🚶 Walk</option>
-        <option value="bike">🚲 Bike</option>
-        <option value="manual">✏️ Manual (straight line)</option>
+        <option value="car">🚗 Car</option><option value="foot">🚶 Walk</option>
+        <option value="bike">🚲 Bike</option><option value="manual">✏️ Manual</option>
       </select>
     </div>
     <div><label class="lbl">Day</label><select class="inp" id="red"></select></div>
   </div>
   <div class="fr2">
     <div><label class="lbl">Fixed cost ($)</label><input class="inp" id="re-cost" type="number" min="0" step=".01" placeholder="0.00"></div>
-    <div><label class="lbl">Manual distance (km)</label><input class="inp" id="re-manual-dist" type="number" min="0" step=".1" placeholder="—"></div>
+    <div><label class="lbl">Manual dist (km)</label><input class="inp" id="re-manual-dist" type="number" min="0" step=".1" placeholder="auto"></div>
   </div>
   <div class="mfoot"><button class="btn bg" id="re-cancel">Cancel</button><button class="btn bb" id="re-save">Recalculate &amp; Save</button></div>
 </div></div>
@@ -500,21 +562,21 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-const APP_VERSION='7.0.0';
+const APP_VERSION='8.0.0';
 /* ===================================================
    GOOGLE DRIVE CONFIG — replace YOUR_CLIENT_ID
-   console.cloud.google.com → Project → Drive API +
-   Identity API → OAuth 2.0 Web Client → HTTPS domain
+   See drawer → Save → Developer setup for instructions
 =================================================== */
 const GOOGLE_CLIENT_ID='YOUR_CLIENT_ID.apps.googleusercontent.com';
 const DRIVE_FOLDER='RoadTripPlanner';
 
 let _id=Date.now();
-function nid(){return ++_id;}
+function nid(){return++_id;}
 
 const S={
   pois:[],routes:[],days:[],
   col:'#c94f14',editing:null,placing:false,pendLL:null,
+  drawerWasOpen:false, /* remember drawer state before map action */
   gps:false,watchId:null,gposLL:null,gpsMk:null,
   sat:false,fcat:'all',editRid:null,
   drawLines:false,poiLines:[],
@@ -525,13 +587,32 @@ const RCOL={car:'#1d56d4',foot:'#15803d',bike:'#d4920a',manual:'#9333ea'};
 const MI={car:'🚗',foot:'🚶',bike:'🚲',manual:'✏️'};
 const PC={};
 
+/* ===== DRAWER ===== */
+function isDrawerOpen(){return document.getElementById('drawer').classList.contains('open');}
+function openDrawer(){document.getElementById('drawer').classList.add('open');document.getElementById('drawer-backdrop').classList.add('on');document.getElementById('btn-drawer').classList.add('open');}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('drawer-backdrop').classList.remove('on');document.getElementById('btn-drawer').classList.remove('open');}
+function toggleDrawer(){isDrawerOpen()?closeDrawer():openDrawer();}
+/* Before a map interaction: close drawer, remember if it was open */
+function hideForMap(){S.drawerWasOpen=isDrawerOpen();if(S.drawerWasOpen)closeDrawer();}
+/* After map interaction resolves: restore */
+function restoreDrawer(){if(S.drawerWasOpen){openDrawer();S.drawerWasOpen=false;}}
+
 /* ===== MAP ===== */
 const map=L.map('map',{zoomControl:true}).setView([46.8,2.3],6);
 const TL={st:L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}),sat:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19})};
 TL.st.addTo(map);
 function mkPin(c,e,sz=27){return L.divIcon({className:'',html:'<div style="background:'+c+';width:'+sz+'px;height:'+sz+'px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2.5px solid rgba(255,255,255,.95);box-shadow:0 3px 10px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(45deg);font-size:'+Math.round(sz*.43)+'px;">'+e+'</div></div>',iconSize:[sz,sz],iconAnchor:[sz/2,sz],popupAnchor:[0,-(sz+4)]});}
 function mkGps(){return L.divIcon({className:'',html:'<div style="position:relative;width:22px;height:22px;"><div style="position:absolute;inset:0;border-radius:50%;background:rgba(21,128,61,.18);animation:gpsr 1.5s infinite;"></div><div style="position:absolute;top:5px;left:5px;width:12px;height:12px;background:#15803d;border-radius:50%;border:2px solid #fff;box-shadow:0 0 7px #15803d;"></div></div>',iconSize:[22,22],iconAnchor:[11,11]});}
-map.on('click',e=>{if(S.placing){S.placing=false;map.getContainer().style.cursor='';qs('#btn-place').textContent='📍 Click map';openModal(e.latlng,'');}});
+
+map.on('click',e=>{
+  if(S.placing){
+    S.placing=false;
+    map.getContainer().style.cursor='';
+    qs('#fab').classList.remove('cancel');
+    qs('#fab').title='Add POI';
+    openModal(e.latlng,''); /* modal opens, drawer stays closed */
+  }
+});
 
 /* ===== THEME ===== */
 function setTheme(dark){document.documentElement.setAttribute('data-theme',dark?'dark':'light');const ico=dark?'🌙':'☀️';['t-theme','t-theme2'].forEach(id=>{const e=qs('#'+id);if(e)e.textContent=ico;});localStorage.setItem('rtp_t',dark?'dark':'light');}
@@ -542,48 +623,26 @@ function qs(s,c=document){return c.querySelector(s);}
 function qsa(s,c=document){return[...c.querySelectorAll(s)];}
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');}
 function fmtD(m){if(m<60)return m+'min';const h=Math.floor(m/60);return h+'h'+(m%60?m%60+'min':'');}
-function fmtCost(v){return v>0?'$'+v.toFixed(2):'';}
 function toast(msg,type=''){const el=qs('#toast'),t=document.createElement('div');t.className='tmsg '+(type||'');t.innerHTML=(type==='ok'?'✅ ':type==='err'?'❌ ':'ℹ️ ')+msg;el.appendChild(t);setTimeout(()=>{t.style.transition='.26s';t.style.opacity='0';t.style.transform='translateY(6px)';setTimeout(()=>t.remove(),280);},3200);}
 
 /* ===== FINANCE ===== */
-function getFuelParams(){return{consump:parseFloat(qs('#f-consump').value)||7,price:parseFloat(qs('#f-price').value)||1.70};}
-function routeTotalCost(r){
-  const fp=getFuelParams();
-  const fuelCost=(r.mode==='car')?+(r.dist*(fp.consump/100)*fp.price).toFixed(2):0;
-  const fixed=+(r.fixedCost||0);
-  return+(fuelCost+fixed).toFixed(2);
-}
-function routeFuelCost(r){
-  if(r.mode!=='car')return 0;
-  const fp=getFuelParams();
-  return+(r.dist*(fp.consump/100)*fp.price).toFixed(2);
-}
-function tripTotalCost(){
-  let t=0;
-  S.routes.forEach(r=>t+=routeTotalCost(r));
-  S.pois.forEach(p=>t+=(p.cost||0));
-  return+t.toFixed(2);
-}
-function dayTotalCost(d){
-  let t=0;
-  d.items.forEach(it=>{
-    if(it.type==='route'){const r=S.routes.find(x=>x.id===it.id);if(r)t+=routeTotalCost(r);}
-    if(it.type==='poi'){const p=S.pois.find(x=>x.id===it.id);if(p)t+=(p.cost||0);}
-  });
-  return+t.toFixed(2);
-}
+function getFP(){return{c:parseFloat(qs('#f-consump').value)||7,p:parseFloat(qs('#f-price').value)||1.70};}
+function routeFuel(r){if(r.mode!=='car')return 0;const fp=getFP();return+(r.dist*(fp.c/100)*fp.p).toFixed(2);}
+function routeCost(r){return+(routeFuel(r)+(r.fixedCost||0)).toFixed(2);}
+function tripCost(){let t=0;S.routes.forEach(r=>t+=routeCost(r));S.pois.forEach(p=>t+=(p.cost||0));return+t.toFixed(2);}
+function dayCost(d){let t=0;d.items.forEach(it=>{if(it.type==='route'){const r=S.routes.find(x=>x.id===it.id);if(r)t+=routeCost(r);}if(it.type==='poi'){const p=S.pois.find(x=>x.id===it.id);if(p)t+=(p.cost||0);}});return+t.toFixed(2);}
 
 /* ===== PHOTOS ===== */
-async function fetchPhotos(name,ll){const k=name+'|'+ll.lat.toFixed(3)+'|'+ll.lng.toFixed(3);if(PC[k]!==undefined)return PC[k];PC[k]=[];try{const r=await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+ll.lat+'%7C'+ll.lng+'&gsradius=500&gslimit=3&format=json&origin=*');const d=await r.json();const pages=(d.query&&d.query.geosearch)||[];const imgs=[];for(const p of pages.slice(0,2)){const ir=await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+p.pageid+'&prop=pageimages&pithumbsize=200&format=json&origin=*');const id2=await ir.json();const pg=id2.query&&id2.query.pages&&id2.query.pages[p.pageid];if(pg&&pg.thumbnail)imgs.push(pg.thumbnail.source);}PC[k]=imgs.slice(0,3);}catch(e){PC[k]=[];}return PC[k];}
-function photosHtml(ph,cls){return ph.map(u=>'<img class="'+cls+'" src="'+u+'" loading="lazy" onerror="this.style.display=\'none\'">').join('');}
+async function fetchPhotos(name,ll){const k=name+'|'+ll.lat.toFixed(3)+'|'+ll.lng.toFixed(3);if(PC[k]!==undefined)return PC[k];PC[k]=[];try{const r=await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+ll.lat+'%7C'+ll.lng+'&gsradius=500&gslimit=3&format=json&origin=*');const d=await r.json();const pages=(d.query&&d.query.geosearch)||[];const imgs=[];for(const pg of pages.slice(0,2)){const ir=await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+pg.pageid+'&prop=pageimages&pithumbsize=200&format=json&origin=*');const id2=await ir.json();const p2=id2.query&&id2.query.pages&&id2.query.pages[pg.pageid];if(p2&&p2.thumbnail)imgs.push(p2.thumbnail.source);}PC[k]=imgs.slice(0,3);}catch(e){PC[k]=[];}return PC[k];}
+function ph(arr,cls){return arr.map(u=>'<img class="'+cls+'" src="'+u+'" loading="lazy" onerror="this.style.display=\'none\'">').join('');}
 
 /* ===== POIs ===== */
 function addPOI(ll,data){
-  const id=(data.id!==undefined&&data.id!==null)?Number(data.id):nid();
+  const id=(data.id!=null)?Number(data.id):nid();
   const p={id,name:data.name||'POI',desc:data.desc||'',cat:data.cat||'general',color:data.color||'#c94f14',rating:data.rating||'',links:data.links||[],tags:data.tags||[],lat:ll.lat,lng:ll.lng,locked:data.locked!==false,dayId:data.dayId||null,cost:+(data.cost||0),marker:null};
   const mk=L.marker([p.lat,p.lng],{icon:mkPin(p.color,CATS[p.cat]||'📍'),draggable:false}).addTo(map);
-  mk.bindPopup('',{minWidth:200});
-  mk.on('click',()=>{mk.setPopupContent(popH(p));mk.openPopup();fetchPhotos(p.name,L.latLng(p.lat,p.lng)).then(imgs=>{if(!imgs.length)return;const pop=mk.getPopup();if(pop&&pop.isOpen()){const pw=qs('.pop-photos',pop.getElement());if(pw)pw.innerHTML=photosHtml(imgs,'pop-photo');}});});
+  mk.bindPopup('',{minWidth:195});
+  mk.on('click',()=>{mk.setPopupContent(popH(p));mk.openPopup();fetchPhotos(p.name,L.latLng(p.lat,p.lng)).then(imgs=>{if(!imgs.length)return;const pop=mk.getPopup();if(pop&&pop.isOpen()){const pw=qs('.pop-photos',pop.getElement());if(pw)pw.innerHTML=ph(imgs,'pop-photo');}});});
   mk.on('dragend',e2=>{p.lat=e2.target.getLatLng().lat;p.lng=e2.target.getLatLng().lng;refreshRt(p.id).then(()=>ra());});
   p.marker=mk;S.pois.push(p);
   if(p.dayId)syncPD(p);
@@ -609,7 +668,7 @@ function popH(p){
     +(links?'<div class="pr">'+links+'</div>':'')
     +(tags?'<div class="pr">'+tags+'</div>':'')
     +'<div class="pop-photos"></div>'
-    +'<div class="pr" style="font-size:.61rem;color:var(--muted);margin-top:3px;">'+p.lat.toFixed(5)+', '+p.lng.toFixed(5)+' · '+(p.locked?'🔒':'🔓')+'</div>'
+    +'<div class="pr" style="font-size:.61rem;color:var(--muted);margin-top:2px;">'+p.lat.toFixed(5)+', '+p.lng.toFixed(5)+' · '+(p.locked?'🔒':'🔓')+'</div>'
     +'<div class="pa"><button class="btn bg bsm" onclick="editPOI('+p.id+')">✏️ Edit</button>'
     +'<button class="btn bg bsm" onclick="toggleLock('+p.id+')">'+(p.locked?'🔓 Unlock':'🔒 Lock')+'</button>'
     +'<button class="btn br bsm" onclick="delPOI('+p.id+')">🗑</button></div>';
@@ -617,7 +676,7 @@ function popH(p){
 function toggleLock(id){const p=S.pois.find(x=>x.id===id);if(!p)return;p.locked=!p.locked;p.marker.dragging[p.locked?'disable':'enable']();p.marker.closePopup();toast(p.locked?'🔒 Locked':'🔓 Unlocked','');}
 function editPOI(id){const p=S.pois.find(x=>x.id===id);if(!p)return;S.editing=id;qs('#m-name').value=p.name;qs('#m-desc').value=p.desc||'';qs('#m-cat').value=p.cat;qs('#m-rat').value=p.rating||'';qs('#m-tags').value=(p.tags||[]).join(', ');qs('#m-cost').value=p.cost||'';selCol(p.color);renderLinks(p.links||[]);qs('#m-hd').textContent='Edit POI';qs('#m-ico').textContent=CATS[p.cat]||'📍';refMDay();qs('#m-day').value=p.dayId||'';qs('#mbk').classList.add('on');setTimeout(()=>qs('#m-name').focus(),80);}
 function delPOI(id){const i=S.pois.findIndex(p=>p.id===id);if(i<0)return;map.removeLayer(S.pois[i].marker);S.pois.splice(i,1);S.routes=S.routes.filter(r=>{if(r.fromId===id||r.toId===id){if(r.poly)map.removeLayer(r.poly);return false;}return true;});S.days.forEach(d=>{d.items=d.items.filter(i=>!(i.type==='poi'&&i.id===id));});ra();toast('POI deleted','ok');}
-function focusPOI(id){const p=S.pois.find(x=>x.id===id);if(!p)return;map.flyTo([p.lat,p.lng],16,{duration:.7});setTimeout(()=>p.marker.fire('click'),750);}
+function focusPOI(id){const p=S.pois.find(x=>x.id===id);if(!p)return;closeDrawer();map.flyTo([p.lat,p.lng],16,{duration:.7});setTimeout(()=>p.marker.fire('click'),750);}
 
 function renderPOIs(){
   const el=qs('#poi-list');qs('#pcnt').textContent=S.pois.length;
@@ -628,7 +687,7 @@ function renderPOIs(){
     const dl=p.dayId?(S.days.find(d=>d.id===p.dayId)||{title:'?'}).title:'';
     return '<div class="poic" data-pid="'+p.id+'" onclick="focusPOI('+p.id+')">'
       +'<div class="ppin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
-      +'<div class="pbody"><div class="pname">'+esc(p.name)+(p.locked?' <span style="font-size:.54rem;">🔒</span>':'')+'</div>'
+      +'<div class="pbody"><div class="pname">'+esc(p.name)+(p.locked?' 🔒':'')+' </div>'
       +'<div class="pmeta">'+(p.rating?'<span>'+'★'.repeat(+p.rating)+'</span>':'')+(dl?'<span>📅 '+esc(dl)+'</span>':'')+'</div>'
       +(p.cost?'<div class="pcost">💰 $'+p.cost.toFixed(2)+'</div>':'')
       +(p.tags&&p.tags.length?'<div class="ptags">'+p.tags.slice(0,3).map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+'</div>':'')
@@ -638,7 +697,7 @@ function renderPOIs(){
   }).join('');
   qsa('.poic[data-pid]',el).forEach(card=>{
     const pid=parseInt(card.dataset.pid,10);const p=S.pois.find(x=>x.id===pid);if(!p)return;
-    card.addEventListener('mouseenter',()=>{const ph=qs('[data-phid="'+pid+'"]',card);if(!ph||ph.innerHTML)return;fetchPhotos(p.name,L.latLng(p.lat,p.lng)).then(imgs=>{if(imgs.length&&ph)ph.innerHTML=photosHtml(imgs.slice(0,2),'poi-photo');});},{once:true});
+    card.addEventListener('mouseenter',()=>{const phEl=qs('[data-phid="'+pid+'"]',card);if(!phEl||phEl.innerHTML)return;fetchPhotos(p.name,L.latLng(p.lat,p.lng)).then(imgs=>{if(imgs.length&&phEl)phEl.innerHTML=ph(imgs.slice(0,2),'poi-photo');});},{once:true});
   });
 }
 
@@ -657,23 +716,23 @@ function focusDay(did){
     if(it.type==='route'){const r=S.routes.find(x=>x.id===it.id);if(r&&r.coords)r.coords.forEach(c=>lls.push(c));}
   });
   if(!lls.length){toast('Nothing to show','');return;}
+  closeDrawer();
   map.fitBounds(L.latLngBounds(lls),{padding:[50,50]});
 }
 
 function renderDays(){
   const el=qs('#day-list');
-  if(!S.days.length){el.innerHTML='<div style="font-size:.73rem;color:var(--muted);padding:10px 2px;text-align:center;">No days yet. Click "+ Add Day".</div>';return;}
+  if(!S.days.length){el.innerHTML='<div style="font-size:.73rem;color:var(--muted);padding:10px 2px;text-align:center;">No days yet.</div>';return;}
   el.innerHTML=S.days.map((d,di)=>{
     const dpois=d.items.filter(i=>i.type==='poi').map(i=>S.pois.find(p=>p.id===i.id)).filter(Boolean);
     const drts=d.items.filter(i=>i.type==='route').map(i=>S.routes.find(r=>r.id===i.id)).filter(Boolean);
     const km=drts.reduce((s,r)=>s+(r.dist||0),0);
     const dur=drts.reduce((s,r)=>s+(r.dur||0),0);
-    const dayCost=dayTotalCost(d);
-    // Cost breakdown for summary
+    const dc=dayCost(d);
     const costRows=[];
     d.items.forEach(it=>{
-      if(it.type==='poi'){const p=S.pois.find(x=>x.id===it.id);if(p&&p.cost>0)costRows.push({label:(CATS[p.cat]||'📍')+' '+p.name,cost:p.cost,sub:''});}
-      if(it.type==='route'){const r=S.routes.find(x=>x.id===it.id);if(r){const tot=routeTotalCost(r);const fuel=routeFuelCost(r);if(tot>0){const sub=[];if(fuel>0)sub.push('fuel $'+fuel.toFixed(2));if(r.fixedCost>0)sub.push('fixed $'+r.fixedCost.toFixed(2));costRows.push({label:(MI[r.mode]||'🛣️')+' '+r.fromName+'→'+r.toName,cost:tot,sub:sub.join(' + ')});}}}
+      if(it.type==='poi'){const p=S.pois.find(x=>x.id===it.id);if(p&&p.cost>0)costRows.push({l:(CATS[p.cat]||'📍')+' '+p.name,c:p.cost,s:''});}
+      if(it.type==='route'){const r=S.routes.find(x=>x.id===it.id);if(r){const tot=routeCost(r);const fuel=routeFuel(r);if(tot>0){const sub=[];if(fuel>0)sub.push('fuel $'+fuel.toFixed(2));if(r.fixedCost>0)sub.push('fixed $'+r.fixedCost.toFixed(2));costRows.push({l:(MI[r.mode]||'🛣️')+' '+r.fromName+'→'+r.toName,c:tot,s:sub.join(' + ')});}}}
     });
     let items='';
     if(!d.items.length)items='<div class="empty-day">Empty — assign POIs via ✏️ Edit</div>';
@@ -691,11 +750,11 @@ function renderDays(){
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
       }else if(it.type==='route'){
         const r=S.routes.find(x=>x.id===it.id);if(!r)return;
-        const tot=routeTotalCost(r);
+        const tot=routeCost(r);
         items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="route" data-iid="'+r.id+'" style="background:rgba(29,86,212,.05);border-color:rgba(29,86,212,.2);">'
           +'<span class="di-grip">⋮⋮</span>'
           +'<span style="flex-shrink:0;">'+(MI[r.mode]||'🛣️')+'</span>'
-          +'<span class="diname" style="color:var(--blue);" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly)map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});})()">'+esc(r.fromName)+' → '+esc(r.toName)+' <span style="font-size:.62rem;">'+r.dist+'km</span></span>'
+          +'<span class="diname" style="color:var(--blue);" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly){closeDrawer();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
           +(tot?'<span class="di-cost">$'+tot.toFixed(2)+'</span>':'')
           +'<button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')" title="Edit">✏️</button>'
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
@@ -704,24 +763,23 @@ function renderDays(){
       }
     });
     items+='<div class="day-dropzone" data-did="'+d.id+'" data-idx="'+d.items.length+'"></div>';
-    // Cost summary
     let costSummary='';
-    if(costRows.length>0||dayCost>0){
+    if(costRows.length||dc>0){
       costSummary='<div class="day-cost-summary">';
-      costRows.forEach(cr=>{costSummary+='<div class="dcs-row"><span>'+cr.label+(cr.sub?' <span style="color:var(--muted2);font-size:.6rem;">('+cr.sub+')</span>':'')+'</span><span>$'+cr.cost.toFixed(2)+'</span></div>';});
-      costSummary+='<div class="dcs-row total"><span>💰 Day total</span><span>$'+dayCost.toFixed(2)+'</span></div></div>';
+      costRows.forEach(cr=>{costSummary+='<div class="dcs-row"><span>'+cr.l+(cr.s?' <span style="font-size:.59rem;color:var(--muted2);">('+cr.s+')</span>':'')+'</span><span>$'+cr.c.toFixed(2)+'</span></div>';});
+      costSummary+='<div class="dcs-row total"><span>💰 Day total</span><span>$'+dc.toFixed(2)+'</span></div></div>';
     }
     return '<div class="dayc" data-dcid="'+d.id+'">'
       +'<div class="dayh"><div class="dayn">'+(di+1)+'</div>'
       +'<input class="dayti" value="'+esc(d.title)+'" onchange="updDay('+d.id+',\'title\',this.value)">'
       +'<input class="daydi" type="date" value="'+(d.date||'')+'" onchange="updDay('+d.id+',\'date\',this.value)">'
       +'<button class="btn br bic bsm" onclick="delDay('+d.id+')">✕</button></div>'
-      +'<div class="dayst"><div class="daystat">📍 <b>'+dpois.length+'</b></div>'+(km?'<div class="daystat">🛣️ <b>'+km.toFixed(0)+' km</b></div>':'')+(dur?'<div class="daystat">⏱ <b>'+fmtD(dur)+'</b></div>':'')+(dayCost?'<div class="daystat gold">💰 <b>$'+dayCost.toFixed(2)+'</b></div>':'')+'</div>'
+      +'<div class="dayst"><div class="daystat">📍 <b>'+dpois.length+'</b></div>'+(km?'<div class="daystat">🛣️ <b>'+km.toFixed(0)+'km</b></div>':'')+(dur?'<div class="daystat">⏱ <b>'+fmtD(dur)+'</b></div>':'')+(dc?'<div class="daystat gold">💰 <b>$'+dc.toFixed(2)+'</b></div>':'')+'</div>'
       +'<div class="dayb">'+items+costSummary+'<div class="dayacts"><button class="btn bg bsm" onclick="addNote('+d.id+')">📝 Note</button><button class="btn bg bsm" onclick="focusDay('+d.id+')">🗺️ View</button></div></div>'
       +'</div>';
   }).join('');
 
-  // Drag & drop wiring
+  // Drag & drop wiring (same as v7)
   let dragging=null;
   qsa('.day-item[draggable]',el).forEach(item=>{
     item.addEventListener('dragstart',ev=>{dragging={el:item,did:parseInt(item.dataset.did,10),idx:parseInt(item.dataset.idx,10),itype:item.dataset.itype,iid:parseInt(item.dataset.iid,10)};item.classList.add('dragging');ev.dataTransfer.effectAllowed='move';});
@@ -730,23 +788,23 @@ function renderDays(){
   qsa('.day-dropzone',el).forEach(dz=>{
     dz.addEventListener('dragover',ev=>{ev.preventDefault();dz.classList.add('over');});
     dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-    dz.addEventListener('drop',ev=>{ev.preventDefault();dz.classList.remove('over');if(dragging)moveDayItem(dragging.did,dragging.idx,dragging.itype,dragging.iid,parseInt(dz.dataset.did,10),parseInt(dz.dataset.idx,10));});
+    dz.addEventListener('drop',ev=>{ev.preventDefault();dz.classList.remove('over');if(dragging)moveItem(dragging.did,dragging.idx,dragging.itype,dragging.iid,parseInt(dz.dataset.did,10),parseInt(dz.dataset.idx,10));});
   });
   qsa('.dayc[data-dcid]',el).forEach(dc=>{
     dc.addEventListener('dragover',ev=>{ev.preventDefault();dc.classList.add('dover');});
     dc.addEventListener('dragleave',ev=>{if(!dc.contains(ev.relatedTarget))dc.classList.remove('dover');});
-    dc.addEventListener('drop',ev=>{ev.preventDefault();dc.classList.remove('dover');if(!dragging)return;const toDid=parseInt(dc.dataset.dcid,10);if(dragging.did===toDid)return;const td=S.days.find(x=>x.id===toDid);if(td)moveDayItem(dragging.did,dragging.idx,dragging.itype,dragging.iid,toDid,td.items.length);});
+    dc.addEventListener('drop',ev=>{ev.preventDefault();dc.classList.remove('dover');if(!dragging)return;const tid=parseInt(dc.dataset.dcid,10);if(dragging.did===tid)return;const td=S.days.find(x=>x.id===tid);if(td)moveItem(dragging.did,dragging.idx,dragging.itype,dragging.iid,tid,td.items.length);});
   });
 }
 
-function moveDayItem(fDid,fIdx,itype,iid,tDid,tIdx){
+function moveItem(fDid,fIdx,itype,iid,tDid,tIdx){
   const fd=S.days.find(d=>d.id===fDid),td=S.days.find(d=>d.id===tDid);if(!fd||!td)return;
-  const [item]=fd.items.splice(fIdx,1);if(!item)return;
+  const[item]=fd.items.splice(fIdx,1);if(!item)return;
   if(itype==='poi'){const p=S.pois.find(x=>x.id===iid);if(p)p.dayId=tDid;}
   if(itype==='route'){const r=S.routes.find(x=>x.id===iid);if(r)r.dayId=tDid;}
   let at=tIdx;if(fDid===tDid&&fIdx<tIdx)at--;
   td.items.splice(Math.max(0,at),0,item);
-  ra();if(fDid!==tDid)toast((itype==='poi'?'POI':'Route')+' moved to '+td.title,'ok');
+  ra();if(fDid!==tDid)toast((itype==='poi'?'POI':'Route')+' → '+td.title,'ok');
 }
 
 /* ===== ROUTES ===== */
@@ -758,24 +816,20 @@ async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
   const fc=+(fixedCost||0);
   let dist,dur,coords,poly;
   if(mode==='manual'){
-    // Straight line between two POIs
     dist=+(manualDist||from.marker.getLatLng().distanceTo(to.marker.getLatLng())/1000).toFixed(1);
-    dur=0;
-    coords=[[from.lat,from.lng],[to.lat,to.lng]];
+    dur=0;coords=[[from.lat,from.lng],[to.lat,to.lng]];
     poly=L.polyline(coords,{color:RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map);
-    map.fitBounds(L.latLngBounds(coords),{padding:[50,50]});
+    closeDrawer();map.fitBounds(L.latLngBounds(coords),{padding:[50,50]});
   }else{
-    const prof={car:'car',foot:'foot',bike:'bike'}[mode]||'car';
     toast('Calculating...','');
     try{
-      const res=await fetch('https://router.project-osrm.org/route/v1/'+prof+'/'+from.lng+','+from.lat+';'+to.lng+','+to.lat+'?overview=full&geometries=geojson');
+      const res=await fetch('https://router.project-osrm.org/route/v1/'+({car:'car',foot:'foot',bike:'bike'}[mode]||'car')+'/'+from.lng+','+from.lat+';'+to.lng+','+to.lat+'?overview=full&geometries=geojson');
       const data=await res.json();
       if(data.code!=='Ok'){toast('Route not found','err');return;}
-      dist=+(data.routes[0].distance/1000).toFixed(1);
-      dur=Math.round(data.routes[0].duration/60);
+      dist=+(data.routes[0].distance/1000).toFixed(1);dur=Math.round(data.routes[0].duration/60);
       coords=data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
       poly=L.polyline(coords,{color:RCOL[mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:mode==='foot'?'8 5':null}).addTo(map);
-      map.fitBounds(poly.getBounds(),{padding:[50,50]});
+      closeDrawer();map.fitBounds(poly.getBounds(),{padding:[50,50]});
     }catch(e){toast('Connection error','err');return;}
   }
   if(editId){const old=S.routes.find(r=>r.id===editId);if(old){if(old.poly)map.removeLayer(old.poly);S.routes=S.routes.filter(r=>r.id!==editId);S.days.forEach(d=>{d.items=d.items.filter(i=>!(i.type==='route'&&i.id===editId));});}}
@@ -783,10 +837,7 @@ async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
   const rt={id:rid,fromId:from.id,toId:to.id,fromName:from.name,toName:to.name,mode,dist,dur,coords,poly,dayId:dayId||null,fixedCost:fc};
   S.routes.push(rt);
   if(dayId){const d=S.days.find(x=>x.id==dayId);if(d&&!d.items.some(i=>i.type==='route'&&i.id===rid))d.items.push({type:'route',id:rid});}
-  ra();
-  const tc=routeTotalCost(rt);
-  toast(dist+' km'+(dur?' · '+fmtD(dur):'')+(tc?' · $'+tc.toFixed(2):'')+' ✓','ok');
-  return rt;
+  ra();const tc=routeCost(rt);toast(dist+'km'+(dur?' · '+fmtD(dur):'')+(tc?' · $'+tc.toFixed(2):'')+' ✓','ok');return rt;
 }
 async function refreshRt(pid){for(const r of S.routes.filter(r=>r.fromId===pid||r.toId===pid)){toast('Updating route…','');await calcRoute(r.fromId,r.toId,r.mode,r.dayId,r.id,r.fixedCost,r.mode==='manual'?r.dist:null);}}
 function delRoute(id){const i=S.routes.findIndex(r=>r.id===id);if(i<0)return;if(S.routes[i].poly)map.removeLayer(S.routes[i].poly);S.routes.splice(i,1);S.days.forEach(d=>{d.items=d.items.filter(i=>!(i.type==='route'&&i.id===id));});ra();}
@@ -798,60 +849,56 @@ function fillRS(f,t,d){
 }
 function renderRoutes(){
   const el=qs('#rlist');qs('#rcnt').textContent=S.routes.length;
-  // Update finance totals
-  const tc=tripTotalCost();
-  const fp=getFuelParams();
-  let fuelOnly=0;S.routes.forEach(r=>fuelOnly+=routeFuelCost(r));
-  qs('#finance-total-rt').innerHTML='Total trip cost: <b>$'+tc.toFixed(2)+'</b> <span style="font-size:.62rem;color:var(--muted);">(fuel $'+fuelOnly.toFixed(2)+' · '+fp.consump+'L/100km · $'+fp.price+'/L)</span>';
+  const tc=tripCost();const fp=getFP();let fuelOnly=0;S.routes.forEach(r=>fuelOnly+=routeFuel(r));
+  qs('#finance-total-rt').innerHTML='Total trip cost: <b>$'+tc.toFixed(2)+'</b> <span style="font-size:.61rem;color:var(--muted);">(fuel $'+fuelOnly.toFixed(2)+' · '+fp.c+'L/100 · $'+fp.p+'/L)</span>';
   if(!S.routes.length){el.innerHTML='<div style="font-size:.73rem;color:var(--muted);">No routes yet.</div>';return;}
   el.innerHTML=S.routes.map((r,i)=>{
     const day=r.dayId?S.days.find(d=>d.id===r.dayId):null;
-    const tot=routeTotalCost(r);const fuel=routeFuelCost(r);
-    const costParts=[];if(fuel>0)costParts.push('⛽ $'+fuel.toFixed(2));if(r.fixedCost>0)costParts.push('🎫 $'+r.fixedCost.toFixed(2));
+    const tot=routeCost(r);const fuel=routeFuel(r);
+    const chips=[];if(fuel>0)chips.push('⛽ $'+fuel.toFixed(2));if(r.fixedCost>0)chips.push('🎫 $'+r.fixedCost.toFixed(2));
     return '<div class="rtc"><div class="rth"><span class="rnum">#'+(i+1)+'</span><span class="rname">'+esc(r.fromName)+' → '+esc(r.toName)+'</span><button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')">✏️</button><button class="btn br bic bsm" onclick="delRoute('+r.id+')">🗑</button></div>'
-      +'<div class="rmeta"><span>'+(MI[r.mode]||'🚗')+'</span><span>🛣️ <b>'+r.dist+' km</b></span>'+(r.dur?'<span>⏱ <b>'+fmtD(r.dur)+'</b></span>':'')+(day?'<span>📅 <b>'+esc(day.title)+'</b></span>':'')+'</div>'
-      +(tot?'<div style="margin-top:4px;display:flex;gap:5px;flex-wrap:wrap;">'+(costParts.map(c=>'<span class="cost-chip">'+c+'</span>').join(''))+( costParts.length>1?'<span class="cost-chip" style="background:rgba(184,134,11,.18);">= $'+tot.toFixed(2)+'</span>':'')+'</div>':'')
-      +'<button class="btn bg bsm" style="margin-top:5px;" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly)map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});})()">🗺️ Show</button></div>';
+      +'<div class="rmeta"><span>'+(MI[r.mode]||'🚗')+'</span><span>🛣️ <b>'+r.dist+'km</b></span>'+(r.dur?'<span>⏱ <b>'+fmtD(r.dur)+'</b></span>':'')+(day?'<span>📅 <b>'+esc(day.title)+'</b></span>':'')+'</div>'
+      +(tot?'<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">'+chips.map(c=>'<span class="cost-chip">'+c+'</span>').join('')+(chips.length>1?'<span class="cost-chip" style="background:rgba(184,134,11,.18);">= $'+tot.toFixed(2)+'</span>':'')+'</div>':'')
+      +'<button class="btn bg bsm" style="margin-top:4px;" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly){closeDrawer();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">🗺️ Show</button></div>';
   }).join('');
 }
 
 /* ===== GPS ===== */
 function startGPS(){if(!('geolocation' in navigator)){toast('Geolocation not supported','err');return;}S.watchId=navigator.geolocation.watchPosition(pos=>setGPos(L.latLng(pos.coords.latitude,pos.coords.longitude)),err=>toast('GPS: '+err.message,'err'),{enableHighAccuracy:true,maximumAge:4000,timeout:15000});S.gps=true;qs('#gdot').classList.add('on');qs('#glbl').textContent='GPS active';qs('#btn-gon').disabled=true;qs('#btn-goff').disabled=false;qs('#gbadge').classList.add('on');toast('GPS started','ok');}
-function stopGPS(){if(S.watchId)navigator.geolocation.clearWatch(S.watchId);if(S.gpsMk){map.removeLayer(S.gpsMk);S.gpsMk=null;}clearPoiLines();S.gps=false;S.gposLL=null;qs('#gdot').classList.remove('on');qs('#glbl').textContent='GPS inactive';qs('#gsub').textContent='Enable to track your location';qs('#btn-gon').disabled=false;qs('#btn-goff').disabled=true;qs('#gbadge').classList.remove('on');renderNearby();}
-function setGPos(ll){S.gposLL=ll;if(!S.gpsMk)S.gpsMk=L.marker(ll,{icon:mkGps(),zIndexOffset:1000}).addTo(map);else S.gpsMk.setLatLng(ll);qs('#gsub').textContent=ll.lat.toFixed(5)+', '+ll.lng.toFixed(5);qs('#gbt').textContent=ll.lat.toFixed(4)+', '+ll.lng.toFixed(4);renderNearby();if(S.drawLines)updatePoiLines();}
-function togglePoiLines(){S.drawLines=!S.drawLines;const tog=qs('#tog-lines');if(tog)tog.classList.toggle('on',S.drawLines);if(!S.drawLines)clearPoiLines();else if(S.gposLL)updatePoiLines();else toast('Start GPS first','');}
-function clearPoiLines(){S.poiLines.forEach(l=>map.removeLayer(l));S.poiLines=[];}
-function updatePoiLines(){
-  clearPoiLines();if(!S.gposLL||!S.drawLines)return;
+function stopGPS(){if(S.watchId)navigator.geolocation.clearWatch(S.watchId);if(S.gpsMk){map.removeLayer(S.gpsMk);S.gpsMk=null;}clearLines();S.gps=false;S.gposLL=null;qs('#gdot').classList.remove('on');qs('#glbl').textContent='GPS inactive';qs('#gsub').textContent='Enable to track location';qs('#btn-gon').disabled=false;qs('#btn-goff').disabled=true;qs('#gbadge').classList.remove('on');renderNearby();}
+function setGPos(ll){S.gposLL=ll;if(!S.gpsMk)S.gpsMk=L.marker(ll,{icon:mkGps(),zIndexOffset:1000}).addTo(map);else S.gpsMk.setLatLng(ll);qs('#gsub').textContent=ll.lat.toFixed(5)+', '+ll.lng.toFixed(5);qs('#gbt').textContent=ll.lat.toFixed(4)+', '+ll.lng.toFixed(4);renderNearby();if(S.drawLines)updateLines();}
+function togglePoiLines(){S.drawLines=!S.drawLines;const t=qs('#tog-lines');if(t)t.classList.toggle('on',S.drawLines);if(!S.drawLines)clearLines();else if(S.gposLL)updateLines();else toast('Start GPS first','');}
+function clearLines(){S.poiLines.forEach(l=>map.removeLayer(l));S.poiLines=[];}
+function updateLines(){
+  clearLines();if(!S.gposLL||!S.drawLines)return;
   S.pois.forEach(p=>{
-    const dist=S.gposLL.distanceTo(L.latLng(p.lat,p.lng));
-    if(dist>50000)return;
+    const dist=S.gposLL.distanceTo(L.latLng(p.lat,p.lng));if(dist>50000)return;
     const color=dist<5000?'#15803d':dist<20000?'#d4920a':'#c81e1e';
     const opacity=Math.max(0.25,1-(dist/50000)*0.7);
     const line=L.polyline([[S.gposLL.lat,S.gposLL.lng],[p.lat,p.lng]],{color,weight:1.5,opacity,dashArray:'5 4'}).addTo(map);
     const km=(dist/1000).toFixed(dist<1000?0:1);
-    const lbl=L.marker([(S.gposLL.lat+p.lat)/2,(S.gposLL.lng+p.lng)/2],{icon:L.divIcon({className:'',html:'<div style="background:rgba(255,255,255,.85);border:1px solid '+color+';border-radius:4px;padding:1px 4px;font-size:.57rem;font-weight:700;color:'+color+';white-space:nowrap;">'+km+'km</div>',iconSize:[null,null],iconAnchor:[0,0]})}).addTo(map);
+    const lbl=L.marker([(S.gposLL.lat+p.lat)/2,(S.gposLL.lng+p.lng)/2],{icon:L.divIcon({className:'',html:'<div style="background:rgba(255,255,255,.85);border:1px solid '+color+';border-radius:4px;padding:1px 4px;font-size:.56rem;font-weight:700;color:'+color+';white-space:nowrap;">'+km+'km</div>',iconSize:[null,null],iconAnchor:[0,0]})}).addTo(map);
     S.poiLines.push(line,lbl);
   });
 }
 function renderNearby(){
-  const el=qs('#nearby');if(!S.gposLL||!S.pois.length){el.innerHTML='<div style="font-size:.73rem;color:var(--muted);">Start GPS to see nearby POIs.</div>';return;}
+  const el=qs('#nearby');if(!S.gposLL||!S.pois.length){el.innerHTML='<div style="font-size:.72rem;color:var(--muted);">Start GPS to see nearby POIs.</div>';return;}
   const sorted=S.pois.map(p=>({p,dist:S.gposLL.distanceTo(L.latLng(p.lat,p.lng))})).sort((a,b)=>a.dist-b.dist).slice(0,10);
-  el.innerHTML=sorted.map(({p,dist},i)=>{const d=dist<1000?Math.round(dist)+' m':(dist/1000).toFixed(1)+' km';return '<div class="nri"><div class="nrr '+(dist<2000?'cl':'')+'">'+( i+1)+'</div><div style="flex:1;"><div style="font-size:.77rem;font-weight:700;">'+(CATS[p.cat]||'📍')+' '+esc(p.name)+'</div><div style="font-size:.63rem;color:var(--acc2);font-weight:700;">'+d+'</div></div><button class="btn bg bic bsm" onclick="focusPOI('+p.id+')">👁</button></div>';}).join('');
+  el.innerHTML=sorted.map(({p,dist},i)=>{const d=dist<1000?Math.round(dist)+' m':(dist/1000).toFixed(1)+' km';return '<div class="nri"><div class="nrr '+(dist<2000?'cl':'')+'">'+( i+1)+'</div><div style="flex:1;"><div style="font-size:.76rem;font-weight:700;">'+(CATS[p.cat]||'📍')+' '+esc(p.name)+'</div><div style="font-size:.62rem;color:var(--acc2);font-weight:700;">'+d+'</div></div><button class="btn bg bic bsm" onclick="focusPOI('+p.id+')">👁</button></div>';}).join('');
 }
 
 /* ===== SEARCH ===== */
 let srchT;
 function doSearch(q){
   clearTimeout(srchT);const el=qs('#srdr');if(!q.trim()){el.style.display='none';return;}
-  srchT=setTimeout(async()=>{try{const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=5',{headers:{'Accept-Language':'en'}});const d=await r.json();if(!d.length){el.style.display='none';return;}el.style.display='block';el.innerHTML='';d.forEach(x=>{const div=document.createElement('div');div.className='sri';div.innerHTML='<b>'+esc(x.display_name.split(',')[0])+'</b><span>'+esc(x.display_name.split(',').slice(1,3).join(',').trim())+'</span>';div.addEventListener('click',()=>pickSR(x.lat,x.lon,x.display_name.split(',')[0]));div.addEventListener('mouseenter',()=>{if(div.querySelector('.poi-photos'))return;fetchPhotos(x.display_name.split(',')[0],L.latLng(+x.lat,+x.lon)).then(imgs=>{if(imgs.length){const ph=document.createElement('div');ph.className='poi-photos';ph.style.marginTop='4px';ph.innerHTML=photosHtml(imgs.slice(0,2),'poi-photo');div.appendChild(ph);}});},{once:true});el.appendChild(div);});}catch(e){}},400);
+  srchT=setTimeout(async()=>{try{const r=await fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=5',{headers:{'Accept-Language':'en'}});const d=await r.json();if(!d.length){el.style.display='none';return;}el.style.display='block';el.innerHTML='';d.forEach(x=>{const div=document.createElement('div');div.className='sri';div.innerHTML='<b>'+esc(x.display_name.split(',')[0])+'</b><span>'+esc(x.display_name.split(',').slice(1,3).join(',').trim())+'</span>';div.addEventListener('click',()=>pickSR(x.lat,x.lon,x.display_name.split(',')[0]));div.addEventListener('mouseenter',()=>{if(div.querySelector('.poi-photos'))return;fetchPhotos(x.display_name.split(',')[0],L.latLng(+x.lat,+x.lon)).then(imgs=>{if(imgs.length){const phEl=document.createElement('div');phEl.className='poi-photos';phEl.style.marginTop='4px';phEl.innerHTML=ph(imgs.slice(0,2),'poi-photo');div.appendChild(phEl);}});},{once:true});el.appendChild(div);});}catch(e){}},400);
 }
-function pickSR(lat,lon,name){qs('#srdr').style.display='none';qs('#psrch').value=name;S.pendLL=L.latLng(+lat,+lon);map.flyTo([lat,lon],15,{duration:.8});openModal(S.pendLL,name);}
+function pickSR(lat,lon,name){qs('#srdr').style.display='none';qs('#psrch').value=name;S.pendLL=L.latLng(+lat,+lon);hideForMap();map.flyTo([lat,lon],15,{duration:.8});openModal(S.pendLL,name);}
 
 /* ===== MODAL ===== */
 function refMDay(){const o='<option value="">— Not assigned —</option>'+S.days.map(d=>'<option value="'+d.id+'">'+esc(d.title)+(d.date?' ('+d.date+')':'')+'</option>').join('');qs('#m-day').innerHTML=o;}
 function openModal(ll,name){S.pendLL=ll;if(!S.editing){qs('#m-name').value=name||'';qs('#m-desc').value='';qs('#m-cat').value='general';qs('#m-rat').value='';qs('#m-tags').value='';qs('#m-cost').value='';selCol('#c94f14');renderLinks([]);qs('#m-hd').textContent='New POI';qs('#m-ico').textContent='📍';}refMDay();if(S.editing){const p=S.pois.find(x=>x.id===S.editing);if(p){qs('#m-day').value=p.dayId||'';qs('#m-cost').value=p.cost||'';}}qs('#mbk').classList.add('on');setTimeout(()=>qs('#m-name').focus(),80);}
-function closeModal(){qs('#mbk').classList.remove('on');S.editing=null;}
+function closeModal(){qs('#mbk').classList.remove('on');S.editing=null;restoreDrawer();}
 function selCol(c){S.col=c;qsa('.csw').forEach(s=>s.classList.toggle('on',s.dataset.c===c));}
 function renderLinks(links){const el=qs('#m-links');el.innerHTML='';(links.length?links:[{label:'',url:''}]).forEach(lk=>{const row=document.createElement('div');row.className='lrow';row.innerHTML='<input class="inp" style="width:76px;flex-shrink:0;" placeholder="Label" value="'+(lk.label||'')+'"><input class="inp" style="flex:1;" placeholder="https://..." value="'+(lk.url||'')+'"><button class="btn br bic bsm" onclick="this.parentNode.remove()">✕</button>';el.appendChild(row);});}
 function getLinks(){return qsa('.lrow').map(row=>{const i=row.querySelectorAll('input');return{label:i[0].value.trim(),url:i[1].value.trim()};}).filter(l=>l.url);}
@@ -859,65 +906,49 @@ function getLinks(){return qsa('.lrow').map(row=>{const i=row.querySelectorAll('
 /* ===== GOOGLE DRIVE ===== */
 let gdTC=null;
 function gdInit(){if(GOOGLE_CLIENT_ID.includes('YOUR_CLIENT_ID'))return;try{gdTC=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',callback:async r=>{if(r.error){toast('Sign-in failed','err');return;}S.gd.token=r.access_token;await gdFetchUser();gdShowIn();toast('Signed in!','ok');}});}catch(e){}}
-function gdSignIn(){if(GOOGLE_CLIENT_ID.includes('YOUR_CLIENT_ID')){toast('Add your Google Client ID in the config','err');return;}if(!gdTC){toast('Google script not ready','err');return;}gdTC.requestAccessToken();}
+function gdSignIn(){if(GOOGLE_CLIENT_ID.includes('YOUR_CLIENT_ID')){toast('Add your Google Client ID in config','err');return;}if(!gdTC){toast('Google script not ready','err');return;}gdTC.requestAccessToken();}
 async function gdFetchUser(){try{const r=await fetch('https://www.googleapis.com/oauth2/v2/userinfo',{headers:{Authorization:'Bearer '+S.gd.token}});S.gd.user=await r.json();}catch(e){}}
 function gdShowIn(){const u=S.gd.user||{};qs('#gd-out').style.display='none';qs('#gd-in').style.display='block';qs('#gd-name').textContent=u.name||'';qs('#gd-email').textContent=u.email||'';const av=qs('#gd-av');av.innerHTML=u.picture?'<img src="'+u.picture+'" style="width:100%;height:100%;object-fit:cover;">':(u.name||'?')[0].toUpperCase();}
 function gdSignOut(){S.gd={token:null,user:null,folderId:null};qs('#gd-out').style.display='block';qs('#gd-in').style.display='none';toast('Signed out','ok');}
 async function gdFolder(){if(S.gd.folderId)return S.gd.folderId;const qr=await fetch("https://www.googleapis.com/drive/v3/files?q=name='"+DRIVE_FOLDER+"' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)",{headers:{Authorization:'Bearer '+S.gd.token}});const qd=await qr.json();if(qd.files&&qd.files.length){S.gd.folderId=qd.files[0].id;return S.gd.folderId;}const cr=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+S.gd.token,'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FOLDER,mimeType:'application/vnd.google-apps.folder'})});const cd=await cr.json();S.gd.folderId=cd.id;return S.gd.folderId;}
 async function gdSave(){if(!S.gd.token){toast('Sign in to Google first','err');return;}toast('Saving...','');try{const fid=await gdFolder();const name=qs('#tname').value.replace(/\s+/g,'_')+'.json';const content=JSON.stringify(tripData(),null,2);const qr=await fetch("https://www.googleapis.com/drive/v3/files?q=name='"+name+"' and '"+fid+"' in parents and trashed=false&fields=files(id)",{headers:{Authorization:'Bearer '+S.gd.token}});const qd=await qr.json();let resp;if(qd.files&&qd.files.length){resp=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+qd.files[0].id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+S.gd.token,'Content-Type':'application/json'},body:content});}else{const b2='rtp_b';const body='--'+b2+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify({name,parents:[fid]})+'\r\n--'+b2+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n--'+b2+'--';resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+S.gd.token,'Content-Type':'multipart/related; boundary='+b2},body});}if(resp.ok)toast('Saved → '+DRIVE_FOLDER+'/'+name,'ok');else toast('Drive save failed','err');}catch(e){toast('Drive error: '+e.message,'err');}}
-async function gdList(){if(!S.gd.token){toast('Sign in first','err');return;}const el=qs('#gd-files');el.innerHTML='<div style="font-size:.69rem;color:var(--muted);">Loading...</div>';try{const fid=await gdFolder();const r=await fetch("https://www.googleapis.com/drive/v3/files?q='"+fid+"' in parents and trashed=false&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc",{headers:{Authorization:'Bearer '+S.gd.token}});const d=await r.json();if(!d.files||!d.files.length){el.innerHTML='<div style="font-size:.69rem;color:var(--muted);">No saved trips yet.</div>';return;}el.innerHTML=d.files.map(f=>'<div class="gdrive-file" onclick="gdLoad(\''+f.id+'\',\''+esc(f.name)+'\')">🗺️ <span class="gdrive-file-name">'+esc(f.name)+'</span><span class="gdrive-file-date">'+new Date(f.modifiedTime).toLocaleDateString()+'</span></div>').join('');}catch(e){el.innerHTML='<div style="font-size:.69rem;color:var(--red);">Failed.</div>';}}
+async function gdList(){if(!S.gd.token){toast('Sign in first','err');return;}const el=qs('#gd-files');el.innerHTML='<div style="font-size:.68rem;color:var(--muted);">Loading...</div>';try{const fid=await gdFolder();const r=await fetch("https://www.googleapis.com/drive/v3/files?q='"+fid+"' in parents and trashed=false&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc",{headers:{Authorization:'Bearer '+S.gd.token}});const d=await r.json();if(!d.files||!d.files.length){el.innerHTML='<div style="font-size:.68rem;color:var(--muted);">No saved trips yet.</div>';return;}el.innerHTML=d.files.map(f=>'<div class="gdrive-file" onclick="gdLoad(\''+f.id+'\',\''+esc(f.name)+'\')">🗺️ <span class="gdrive-file-name">'+esc(f.name)+'</span><span class="gdrive-file-date">'+new Date(f.modifiedTime).toLocaleDateString()+'</span></div>').join('');}catch(e){el.innerHTML='<div style="font-size:.68rem;color:var(--red);">Failed.</div>';}}
 async function gdLoad(fid,name){toast('Loading...','');try{const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fid+'?alt=media',{headers:{Authorization:'Bearer '+S.gd.token}});loadData(await r.text());toast('Loaded: '+name,'ok');}catch(e){toast('Load failed','err');}}
 
 /* ===== SAVE/LOAD ===== */
-function tripData(){
-  const fp=getFuelParams();
-  return{appVersion:APP_VERSION,savedAt:new Date().toISOString(),tripName:qs('#tname').value,
-    fuelSettings:{consump:fp.consump,price:fp.price},
-    pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayId:p.dayId,cost:p.cost||0})),
-    routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,coords:r.coords,dayId:r.dayId,fixedCost:r.fixedCost||0})),
-    days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
+function tripData(){const fp=getFP();return{appVersion:APP_VERSION,savedAt:new Date().toISOString(),tripName:qs('#tname').value,fuelSettings:{consump:fp.c,price:fp.p},pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayId:p.dayId,cost:p.cost||0})),routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,coords:r.coords,dayId:r.dayId,fixedCost:r.fixedCost||0})),days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
 }
 function saveTrip(){const data=tripData();const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=data.tripName.replace(/\s+/g,'_')+'_v'+APP_VERSION+'.json';a.click();toast('Saved!','ok');}
-function loadData(json){
-  try{
-    const d=JSON.parse(json);clearAll(true);qs('#tname').value=d.tripName||d.name||'';
-    if(d.fuelSettings){if(d.fuelSettings.consump)qs('#f-consump').value=d.fuelSettings.consump;if(d.fuelSettings.price)qs('#f-price').value=d.fuelSettings.price;}
-    (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
-    (d.pois||[]).forEach(p=>addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayId:p.dayId?Number(p.dayId):null,cost:+(p.cost||0)}));
-    fillRS('rf','rt','rd');
-    (d.routes||[]).forEach(r=>{const poly=(r.mode==='manual')?L.polyline(r.coords,{color:RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map):L.polyline(r.coords,{color:RCOL[r.mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:r.mode==='foot'?'8 5':null}).addTo(map);S.routes.push(Object.assign({},r,{id:Number(r.id),fromId:Number(r.fromId),toId:Number(r.toId),dayId:r.dayId?Number(r.dayId):null,fixedCost:+(r.fixedCost||0),poly}));});
-    S.pois.forEach(p=>{if(p.dayId&&!S.days.find(x=>x.id===p.dayId))p.dayId=null;});
-    ra();if(S.pois.length)map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[50,50]});
-    const ver=d.appVersion?'v'+d.appVersion:'legacy';toast('Loaded ('+ver+', '+( d.savedAt?new Date(d.savedAt).toLocaleDateString():'?')+')','ok');
-  }catch(e){toast('Invalid JSON','err');console.error(e);}
-}
-function clearAll(s){S.pois.forEach(p=>map.removeLayer(p.marker));S.routes.forEach(r=>{if(r.poly)map.removeLayer(r.poly);});clearPoiLines();S.pois.length=0;S.routes.length=0;S.days.length=0;ra();if(!s)toast('Cleared','ok');}
+function loadData(json){try{const d=JSON.parse(json);clearAll(true);qs('#tname').value=d.tripName||d.name||'';if(d.fuelSettings){if(d.fuelSettings.consump)qs('#f-consump').value=d.fuelSettings.consump;if(d.fuelSettings.price)qs('#f-price').value=d.fuelSettings.price;}(d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));(d.pois||[]).forEach(p=>addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayId:p.dayId?Number(p.dayId):null,cost:+(p.cost||0)}));fillRS('rf','rt','rd');(d.routes||[]).forEach(r=>{const poly=(r.mode==='manual')?L.polyline(r.coords,{color:RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map):L.polyline(r.coords,{color:RCOL[r.mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:r.mode==='foot'?'8 5':null}).addTo(map);S.routes.push(Object.assign({},r,{id:Number(r.id),fromId:Number(r.fromId),toId:Number(r.toId),dayId:r.dayId?Number(r.dayId):null,fixedCost:+(r.fixedCost||0),poly}));});S.pois.forEach(p=>{if(p.dayId&&!S.days.find(x=>x.id===p.dayId))p.dayId=null;});ra();if(S.pois.length)map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[50,50]});const ver=d.appVersion?'v'+d.appVersion:'legacy';toast('Loaded ('+ver+', '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'?')+')','ok');}catch(e){toast('Invalid JSON','err');console.error(e);}}
+function clearAll(s){S.pois.forEach(p=>map.removeLayer(p.marker));S.routes.forEach(r=>{if(r.poly)map.removeLayer(r.poly);});clearLines();S.pois.length=0;S.routes.length=0;S.days.length=0;ra();if(!s)toast('Cleared','ok');}
 function expGPX(){const w=S.pois.map(p=>'  <wpt lat="'+p.lat+'" lon="'+p.lng+'"><name>'+esc(p.name)+'</name></wpt>').join('\n');const t=S.routes.map(r=>'  <trk><name>'+esc(r.fromName)+'→'+esc(r.toName)+'</name><trkseg>'+r.coords.map(c=>'<trkpt lat="'+c[0]+'" lon="'+c[1]+'"></trkpt>').join('')+'</trkseg></trk>').join('\n');const b=new Blob(['<?xml version="1.0"?>\n<gpx version="1.1">\n'+w+'\n'+t+'\n</gpx>'],{type:'application/gpx+xml'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='roadtrip.gpx';a.click();toast('GPX exported','ok');}
 
 /* ===== RENDER ALL ===== */
-function updStats(){
-  const km=S.routes.reduce((s,r)=>s+(r.dist||0),0);
-  const tc=tripTotalCost();
-  [['hp',S.pois.length],['hr',S.routes.length],['hd',S.days.length],['hkm',km.toFixed(0)],['htotal',tc.toFixed(0)],['stp',S.pois.length],['str',S.routes.length],['std',S.days.length],['stkm',km.toFixed(0)]].forEach(([id,v])=>{const e=qs('#'+id);if(e)e.textContent=v;});
-  const stcost=qs('#stcost');if(stcost)stcost.textContent='$'+tc.toFixed(2);
-}
+function updStats(){const km=S.routes.reduce((s,r)=>s+(r.dist||0),0);const tc=tripCost();[['hp',S.pois.length],['hr',S.routes.length],['hd',S.days.length],['hkm',km.toFixed(0)+'km'],['htotal',tc.toFixed(0)],['stp',S.pois.length],['str',S.routes.length],['std',S.days.length],['stkm',km.toFixed(0)]].forEach(([id,v])=>{const e=qs('#'+id);if(e)e.textContent=v;});const stcost=qs('#stcost');if(stcost)stcost.textContent='$'+tc.toFixed(2);}
 function ra(){renderPOIs();renderDays();renderRoutes();renderNearby();updStats();fillRS('rf','rt','rd');refMDay();}
 
-/* ===== MOBILE SHEET ===== */
-const SH_T={pois:'📍 POIs',days:'📅 Days',gps:'🧭 GPS',save:'☁️ Save'};
-function openSheet(id){ra();qs('#sh-ttl').textContent=SH_T[id]||id;const body=qs('#sh-body');body.innerHTML='';if(id==='pois'){const fb=qs('#fbar').cloneNode(true);fb.querySelectorAll('.fc').forEach(c=>{c.addEventListener('click',()=>{S.fcat=c.dataset.cat;qsa('.fc').forEach(x=>x.classList.remove('on'));qsa('[data-cat="'+c.dataset.cat+'"]').forEach(x=>x.classList.add('on'));ra();openSheet(id);});});body.appendChild(fb);}const clone=qs('#panel-'+id).cloneNode(true);clone.style.cssText='display:flex!important;flex:none;overflow:visible;max-height:none;';clone.querySelectorAll('.pbd').forEach(b=>{b.style.overflow='visible';b.style.maxHeight='none';});body.appendChild(clone);wireSheet(clone);qs('#sbk').classList.add('on');qs('#sheet').classList.add('on');qsa('.bni').forEach(b=>b.classList.toggle('on',b.dataset.sh===id));}
-function wireSheet(c){c.querySelector('#btn-place')&&c.querySelector('#btn-place').addEventListener('click',()=>{S.placing=true;map.getContainer().style.cursor='crosshair';closeSheet();toast('Tap map','');});c.querySelector('#btn-new')&&c.querySelector('#btn-new').addEventListener('click',()=>{S.pendLL=map.getCenter();openModal(S.pendLL,'');closeSheet();});c.querySelector('#btn-srch')&&c.querySelector('#btn-srch').addEventListener('click',()=>doSearch((c.querySelector('#psrch')||{value:''}).value));c.querySelector('#psrch')&&c.querySelector('#psrch').addEventListener('input',ev=>doSearch(ev.target.value));c.querySelector('#btn-addd')&&c.querySelector('#btn-addd').addEventListener('click',()=>{addDay();openSheet('days');});c.querySelector('#btn-gon')&&c.querySelector('#btn-gon').addEventListener('click',()=>{startGPS();closeSheet();});c.querySelector('#btn-goff')&&c.querySelector('#btn-goff').addEventListener('click',stopGPS);c.querySelector('#tog-lines')&&c.querySelector('#tog-lines').addEventListener('click',togglePoiLines);c.querySelector('#btn-save')&&c.querySelector('#btn-save').addEventListener('click',saveTrip);c.querySelector('#btn-load')&&c.querySelector('#btn-load').addEventListener('click',()=>qs('#finp').click());c.querySelector('#btn-gpx')&&c.querySelector('#btn-gpx').addEventListener('click',expGPX);c.querySelector('#btn-clr')&&c.querySelector('#btn-clr').addEventListener('click',()=>{if(confirm('Clear all?'))clearAll();});c.querySelector('#btn-gsign')&&c.querySelector('#btn-gsign').addEventListener('click',gdSignIn);c.querySelector('#btn-gsout')&&c.querySelector('#btn-gsout').addEventListener('click',gdSignOut);c.querySelector('#btn-gdsv')&&c.querySelector('#btn-gdsv').addEventListener('click',gdSave);c.querySelector('#btn-gdls')&&c.querySelector('#btn-gdls').addEventListener('click',gdList);}
-function closeSheet(){qs('#sbk').classList.remove('on');qs('#sheet').classList.remove('on');}
-
 /* ===== EVENTS ===== */
+// Drawer open auto-triggers
+qs('#btn-drawer').addEventListener('click',toggleDrawer);
+// Tabs
 qsa('#tabs .tab').forEach(tb=>{tb.addEventListener('click',()=>{qsa('#tabs .tab').forEach(x=>x.classList.remove('on'));qsa('.panel').forEach(x=>x.classList.remove('on'));tb.classList.add('on');qs('#panel-'+tb.dataset.tab).classList.add('on');qs('#fbar').style.display=tb.dataset.tab==='pois'?'flex':'none';});});
+// Filter chips
 qsa('#fbar .fc').forEach(c=>{c.addEventListener('click',()=>{S.fcat=c.dataset.cat;qsa('.fc').forEach(x=>x.classList.remove('on'));qsa('[data-cat="'+c.dataset.cat+'"]').forEach(x=>x.classList.add('on'));ra();});});
+// Search
 qs('#psrch').addEventListener('input',ev=>doSearch(ev.target.value));
 qs('#btn-srch').addEventListener('click',()=>doSearch(qs('#psrch').value));
 document.addEventListener('click',ev=>{if(!ev.target.closest('.sr')&&!ev.target.closest('#srdr'))qs('#srdr').style.display='none';});
-qs('#btn-place').addEventListener('click',()=>{S.placing=!S.placing;qs('#btn-place').textContent=S.placing?'❌ Cancel':'📍 Click map';map.getContainer().style.cursor=S.placing?'crosshair':'';if(S.placing)toast('Click the map to place a POI','');});
+// Place POI — close drawer, wait for click
+qs('#btn-place').addEventListener('click',()=>{
+  S.placing=!S.placing;
+  if(S.placing){hideForMap();map.getContainer().style.cursor='crosshair';qs('#fab').classList.add('cancel');qs('#fab').title='Cancel';toast('Click/tap the map to place a POI','');}
+  else{map.getContainer().style.cursor='';qs('#fab').classList.remove('cancel');restoreDrawer();}
+});
+// New POI (center of map)
 qs('#btn-new').addEventListener('click',()=>{S.pendLL=map.getCenter();openModal(S.pendLL,'');});
+// Days
 qs('#btn-addd').addEventListener('click',addDay);
+// Modal
 qs('#m-cancel').addEventListener('click',closeModal);
 qs('#mbk').addEventListener('click',ev=>{if(ev.target===ev.currentTarget)closeModal();});
 qs('#m-cat').addEventListener('change',ev=>{qs('#m-ico').textContent=CATS[ev.target.value]||'📍';});
@@ -926,36 +957,49 @@ qs('#btn-alink').addEventListener('click',()=>{const el=qs('#m-links');const row
 qs('#m-save').addEventListener('click',()=>{
   const name=qs('#m-name').value.trim();if(!name){qs('#m-name').focus();toast('Please enter a name','err');return;}
   const data={name,desc:qs('#m-desc').value,cat:qs('#m-cat').value,rating:qs('#m-rat').value,tags:qs('#m-tags').value.split(',').map(t=>t.trim()).filter(Boolean),links:getLinks(),color:S.col,dayId:qs('#m-day').value?Number(qs('#m-day').value):null,cost:+(qs('#m-cost').value||0)};
-  if(S.editing){
-    const p=S.pois.find(x=>x.id===S.editing);
-    if(p){const oldD=p.dayId;p.name=data.name;p.desc=data.desc;p.cat=data.cat;p.rating=data.rating;p.tags=data.tags;p.links=data.links;p.color=data.color;p.cost=data.cost;p.marker.setIcon(mkPin(p.color,CATS[p.cat]||'📍'));if(oldD!==data.dayId)setPOIDay(p,data.dayId);else p.dayId=data.dayId;toast('POI updated','ok');}
-  }else{if(!S.pendLL){closeModal();return;}addPOI(S.pendLL,data);map.flyTo([S.pendLL.lat,S.pendLL.lng],Math.max(map.getZoom(),14));toast('POI added!','ok');}
+  if(S.editing){const p=S.pois.find(x=>x.id===S.editing);if(p){const oldD=p.dayId;p.name=data.name;p.desc=data.desc;p.cat=data.cat;p.rating=data.rating;p.tags=data.tags;p.links=data.links;p.color=data.color;p.cost=data.cost;p.marker.setIcon(mkPin(p.color,CATS[p.cat]||'📍'));if(oldD!==data.dayId)setPOIDay(p,data.dayId);else p.dayId=data.dayId;toast('POI updated','ok');}}
+  else{if(!S.pendLL){closeModal();return;}addPOI(S.pendLL,data);map.flyTo([S.pendLL.lat,S.pendLL.lng],Math.max(map.getZoom(),14));toast('POI added!','ok');}
   closeModal();qs('#psrch').value='';ra();
 });
+// Route edit modal
 qs('#re-cancel').addEventListener('click',()=>{qs('#rmbk').classList.remove('on');S.editRid=null;});
 qs('#rmbk').addEventListener('click',ev=>{if(ev.target===ev.currentTarget){qs('#rmbk').classList.remove('on');S.editRid=null;}});
 qs('#re-save').addEventListener('click',async()=>{const f=qs('#ref').value,t=qs('#ret').value,m=qs('#rem').value,d=qs('#red').value;if(!f||!t){toast('Select start and end','err');return;}qs('#rmbk').classList.remove('on');await calcRoute(Number(f),Number(t),m,d?Number(d):null,S.editRid,+(qs('#re-cost').value||0),+(qs('#re-manual-dist').value||0));S.editRid=null;});
-qs('#btn-calc').addEventListener('click',()=>{const f=qs('#rf').value,t=qs('#rt').value;if(!f||!t){toast('Select From and To POIs','err');return;}calcRoute(Number(f),Number(t),qs('#rm').value,qs('#rd').value?Number(qs('#rd').value):null,null,+(qs('#r-cost').value||0),+(qs('#r-manual-dist').value||0));});
-// Update cost display when fuel params change
+// Calc route — close drawer to show map result
+qs('#btn-calc').addEventListener('click',()=>{const f=qs('#rf').value,t=qs('#rt').value;if(!f||!t){toast('Select From and To POIs','err');return;}hideForMap();calcRoute(Number(f),Number(t),qs('#rm').value,qs('#rd').value?Number(qs('#rd').value):null,null,+(qs('#r-cost').value||0),+(qs('#r-manual-dist').value||0)).then(()=>restoreDrawer());});
+// Finance live update
 ['f-consump','f-price'].forEach(id=>qs('#'+id).addEventListener('input',()=>renderRoutes()));
+// GPS
 qs('#btn-gon').addEventListener('click',startGPS);qs('#btn-goff').addEventListener('click',stopGPS);
-qs('#t-gpsq').addEventListener('click',()=>{if(S.gposLL){map.flyTo(S.gposLL,15,{duration:.7});return;}if(!('geolocation' in navigator)){toast('No geolocation','err');return;}navigator.geolocation.getCurrentPosition(pos=>{const ll=L.latLng(pos.coords.latitude,pos.coords.longitude);setGPos(ll);map.flyTo(ll,15,{duration:.7});if(!S.gps)startGPS();},()=>toast('Location denied','err'),{enableHighAccuracy:true});});
-['btn-savh','btn-save'].forEach(id=>qs('#'+id)&&qs('#'+id).addEventListener('click',saveTrip));
-['btn-lodh','btn-load'].forEach(id=>qs('#'+id)&&qs('#'+id).addEventListener('click',()=>qs('#finp').click()));
+qs('#t-gpsq').addEventListener('click',()=>{if(S.gposLL){closeDrawer();map.flyTo(S.gposLL,15,{duration:.7});return;}if(!('geolocation' in navigator)){toast('No geolocation','err');return;}navigator.geolocation.getCurrentPosition(pos=>{const ll=L.latLng(pos.coords.latitude,pos.coords.longitude);setGPos(ll);closeDrawer();map.flyTo(ll,15,{duration:.7});if(!S.gps)startGPS();},()=>toast('Location denied','err'),{enableHighAccuracy:true});});
+// Save / load
+['btn-savh','btn-savh2','btn-save'].forEach(id=>qs('#'+id)&&qs('#'+id).addEventListener('click',saveTrip));
+['btn-lodh','btn-lodh2','btn-load'].forEach(id=>qs('#'+id)&&qs('#'+id).addEventListener('click',()=>qs('#finp').click()));
 qs('#finp').addEventListener('change',ev=>{const f=ev.target.files[0];if(!f)return;const r=new FileReader();r.onload=e2=>loadData(e2.target.result);r.readAsText(f);ev.target.value='';});
-qs('#btn-gpx').addEventListener('click',expGPX);qs('#btn-clr').addEventListener('click',()=>{if(confirm('Clear all?'))clearAll();});
+qs('#btn-gpx').addEventListener('click',expGPX);
+qs('#btn-clr').addEventListener('click',()=>{if(confirm('Clear all?'))clearAll();});
+// Drive
 qs('#btn-gsign').addEventListener('click',gdSignIn);qs('#btn-gsout').addEventListener('click',gdSignOut);qs('#btn-gdsv').addEventListener('click',gdSave);qs('#btn-gdls').addEventListener('click',gdList);
+// Theme
 ['t-theme','t-theme2'].forEach(id=>qs('#'+id)&&qs('#'+id).addEventListener('click',()=>setTheme(document.documentElement.getAttribute('data-theme')!=='dark')));
-qs('#t-home').addEventListener('click',()=>{if(S.pois.length)map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[60,60]});else map.setView([46.8,2.3],6);});
+// Map toolbar
+qs('#t-home').addEventListener('click',()=>{closeDrawer();if(S.pois.length)map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[60,60]});else map.setView([46.8,2.3],6);});
 qs('#t-sat').addEventListener('click',()=>{S.sat=!S.sat;if(S.sat){map.removeLayer(TL.st);TL.sat.addTo(map);}else{map.removeLayer(TL.sat);TL.st.addTo(map);}qs('#t-sat').classList.toggle('on',S.sat);});
-qsa('.bni').forEach(b=>{b.addEventListener('click',()=>{const id=b.dataset.sh;if(qs('#sheet').classList.contains('on')&&b.classList.contains('on')){closeSheet();return;}ra();openSheet(id);});});
-qs('#sbk').addEventListener('click',closeSheet);
-qs('#fab').addEventListener('click',()=>{S.placing=true;map.getContainer().style.cursor='crosshair';toast('Tap the map to place a POI','');closeSheet();});
-let ty0=0;qs('#sh-hnd').addEventListener('touchstart',ev=>{ty0=ev.touches[0].clientY;});qs('#sh-hnd').addEventListener('touchend',ev=>{if(ev.changedTouches[0].clientY-ty0>40)closeSheet();});
+// FAB — toggle place mode
+qs('#fab').addEventListener('click',()=>{
+  if(S.placing){S.placing=false;map.getContainer().style.cursor='';qs('#fab').classList.remove('cancel');qs('#fab').title='Add POI';restoreDrawer();}
+  else{hideForMap();S.placing=true;map.getContainer().style.cursor='crosshair';qs('#fab').classList.add('cancel');qs('#fab').title='Cancel';toast('Tap the map to place a POI','');}
+});
+// Keyboard ESC closes drawer or cancels placing
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(S.placing){S.placing=false;map.getContainer().style.cursor='';qs('#fab').classList.remove('cancel');restoreDrawer();}else closeDrawer();}});
+// Swipe right on map to open drawer
+let swX=0;
+document.getElementById('map').addEventListener('touchstart',ev=>{swX=ev.touches[0].clientX;},{passive:true});
+document.getElementById('map').addEventListener('touchend',ev=>{const dx=ev.changedTouches[0].clientX-swX;if(dx>60&&swX<40)openDrawer();},{passive:true});
 document.head.insertAdjacentHTML('beforeend','<style>@keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}</style>');
 window.addEventListener('load',()=>{try{gdInit();}catch(e){}});
 ra();qs('#fbar').style.display='flex';
-toast('RoadTrip Planner v'+APP_VERSION+' 💰','ok');
+toast('RoadTrip Planner v'+APP_VERSION,'ok');
 </script>
 </body>
 </html>
