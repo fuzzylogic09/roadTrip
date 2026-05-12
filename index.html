@@ -282,9 +282,6 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 /* make room for topbar */
 .leaflet-top{top:calc(var(--tb) + 8px)!important;}
 
-/* Desktop: drawer pushes no backdrop, stays semi-transparent */
-@media(min-width:769px){
-  #drawer-backdrop{display:none!important;}
   #drawer{box-shadow:3px 0 20px rgba(0,0,0,.12);}
 }
 </style>
@@ -603,7 +600,7 @@ function toggleDrawer(){isDrawerOpen()?closeDrawer():openDrawer();}
 function closeDrawerMobile(){if(isMobile())closeDrawer();}
 /* hideForMap/restoreDrawer only act on mobile */
 function hideForMap(){S.drawerWasOpen=isDrawerOpen();if(isMobile()&&S.drawerWasOpen)closeDrawer();}
-function restoreDrawer(){if(isMobile()&&S.drawerWasOpen){openDrawer();S.drawerWasOpen=false;}}}
+function restoreDrawer(){if(isMobile()&&S.drawerWasOpen){openDrawer();S.drawerWasOpen=false;}}
 
 /* ===== MAP ===== */
 const map=L.map('map',{zoomControl:true}).setView([46.8,2.3],6);
@@ -1004,13 +1001,7 @@ document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(S.placing){S.p
 let swX=0;
 document.getElementById('map').addEventListener('touchstart',ev=>{swX=ev.touches[0].clientX;},{passive:true});
 document.getElementById('map').addEventListener('touchend',ev=>{const dx=ev.changedTouches[0].clientX-swX;if(dx>60&&swX<40)openDrawer();},{passive:true});
-document.head.insertAdjacentHTML('beforeend','<style>@keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}
-/* Desktop: drawer pushes no backdrop, stays semi-transparent */
-@media(min-width:769px){
-  #drawer-backdrop{display:none!important;}
-  #drawer{box-shadow:3px 0 20px rgba(0,0,0,.12);}
-}
-</style>');
+(function(){var s=document.createElement('style');s.textContent='@keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}@keyframes gpa{0%,100%{opacity:1}50%{opacity:.28}}';document.head.appendChild(s);})();
 window.addEventListener('load',()=>{try{gdInit();}catch(e){}});
 window.addEventListener('resize',()=>{if(window.innerWidth>=769&&!isDrawerOpen())openDrawer();});
 // Inject version string wherever id ends in '-ver'
