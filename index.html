@@ -308,7 +308,7 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 
 <!-- TOP BAR (always visible) -->
 <div id="topbar">
-  <button id="btn-drawer" onclick="toggleDrawer()">☰</button>
+  <button id="btn-drawer">☰</button>
   <div id="topbar-title">Road<em>Trip</em></div>
   <div id="topbar-pills">
     <div class="tpill">📍 <b id="hp">0</b></div>
@@ -595,14 +595,15 @@ const MI={car:'🚗',foot:'🚶',bike:'🚲',manual:'✏️'};
 const PC={};
 
 /* ===== DRAWER ===== */
+function isMobile(){return window.innerWidth<769;}
 function isDrawerOpen(){return document.getElementById('drawer').classList.contains('open');}
 function openDrawer(){document.getElementById('drawer').classList.add('open');document.getElementById('drawer-backdrop').classList.add('on');document.getElementById('btn-drawer').classList.add('open');}
 function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('drawer-backdrop').classList.remove('on');document.getElementById('btn-drawer').classList.remove('open');}
 function toggleDrawer(){isDrawerOpen()?closeDrawer():openDrawer();}
-/* Before a map interaction: close drawer, remember if it was open */
-function hideForMap(){S.drawerWasOpen=isDrawerOpen();if(S.drawerWasOpen)closeDrawer();}
-/* After map interaction resolves: restore */
-function restoreDrawer(){if(S.drawerWasOpen){openDrawer();S.drawerWasOpen=false;}}
+function closeDrawerMobile(){if(isMobile())closeDrawer();}
+/* hideForMap/restoreDrawer only act on mobile */
+function hideForMap(){S.drawerWasOpen=isDrawerOpen();if(isMobile()&&S.drawerWasOpen)closeDrawer();}
+function restoreDrawer(){if(isMobile()&&S.drawerWasOpen){openDrawer();S.drawerWasOpen=false;}}}
 
 /* ===== MAP ===== */
 const map=L.map('map',{zoomControl:true}).setView([46.8,2.3],6);
@@ -683,7 +684,7 @@ function popH(p){
 function toggleLock(id){const p=S.pois.find(x=>x.id===id);if(!p)return;p.locked=!p.locked;p.marker.dragging[p.locked?'disable':'enable']();p.marker.closePopup();toast(p.locked?'🔒 Locked':'🔓 Unlocked','');}
 function editPOI(id){const p=S.pois.find(x=>x.id===id);if(!p)return;S.editing=id;qs('#m-name').value=p.name;qs('#m-desc').value=p.desc||'';qs('#m-cat').value=p.cat;qs('#m-rat').value=p.rating||'';qs('#m-tags').value=(p.tags||[]).join(', ');qs('#m-cost').value=p.cost||'';selCol(p.color);renderLinks(p.links||[]);qs('#m-hd').textContent='Edit POI';qs('#m-ico').textContent=CATS[p.cat]||'📍';refMDay();qs('#m-day').value=p.dayId||'';qs('#mbk').classList.add('on');setTimeout(()=>qs('#m-name').focus(),80);}
 function delPOI(id){const i=S.pois.findIndex(p=>p.id===id);if(i<0)return;map.removeLayer(S.pois[i].marker);S.pois.splice(i,1);S.routes=S.routes.filter(r=>{if(r.fromId===id||r.toId===id){if(r.poly)map.removeLayer(r.poly);return false;}return true;});S.days.forEach(d=>{d.items=d.items.filter(i=>!(i.type==='poi'&&i.id===id));});ra();toast('POI deleted','ok');}
-function focusPOI(id){const p=S.pois.find(x=>x.id===id);if(!p)return;closeDrawer();map.flyTo([p.lat,p.lng],16,{duration:.7});setTimeout(()=>p.marker.fire('click'),750);}
+function focusPOI(id){const p=S.pois.find(x=>x.id===id);if(!p)return;closeDrawerMobile();map.flyTo([p.lat,p.lng],16,{duration:.7});setTimeout(()=>p.marker.fire('click'),750);}
 
 function renderPOIs(){
   const el=qs('#poi-list');qs('#pcnt').textContent=S.pois.length;
@@ -723,7 +724,7 @@ function focusDay(did){
     if(it.type==='route'){const r=S.routes.find(x=>x.id===it.id);if(r&&r.coords)r.coords.forEach(c=>lls.push(c));}
   });
   if(!lls.length){toast('Nothing to show','');return;}
-  closeDrawer();
+  closeDrawerMobile();
   map.fitBounds(L.latLngBounds(lls),{padding:[50,50]});
 }
 
@@ -761,7 +762,7 @@ function renderDays(){
         items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="route" data-iid="'+r.id+'" style="background:rgba(29,86,212,.05);border-color:rgba(29,86,212,.2);">'
           +'<span class="di-grip">⋮⋮</span>'
           +'<span style="flex-shrink:0;">'+(MI[r.mode]||'🛣️')+'</span>'
-          +'<span class="diname" style="color:var(--blue);" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly){closeDrawer();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
+          +'<span class="diname" style="color:var(--blue);" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
           +(tot?'<span class="di-cost">$'+tot.toFixed(2)+'</span>':'')
           +'<button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')" title="Edit">✏️</button>'
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
@@ -826,7 +827,7 @@ async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
     dist=+(manualDist||from.marker.getLatLng().distanceTo(to.marker.getLatLng())/1000).toFixed(1);
     dur=0;coords=[[from.lat,from.lng],[to.lat,to.lng]];
     poly=L.polyline(coords,{color:RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map);
-    closeDrawer();map.fitBounds(L.latLngBounds(coords),{padding:[50,50]});
+    closeDrawerMobile();map.fitBounds(L.latLngBounds(coords),{padding:[50,50]});
   }else{
     toast('Calculating...','');
     try{
@@ -836,7 +837,7 @@ async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
       dist=+(data.routes[0].distance/1000).toFixed(1);dur=Math.round(data.routes[0].duration/60);
       coords=data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
       poly=L.polyline(coords,{color:RCOL[mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:mode==='foot'?'8 5':null}).addTo(map);
-      closeDrawer();map.fitBounds(poly.getBounds(),{padding:[50,50]});
+      closeDrawerMobile();map.fitBounds(poly.getBounds(),{padding:[50,50]});
     }catch(e){toast('Connection error','err');return;}
   }
   if(editId){const old=S.routes.find(r=>r.id===editId);if(old){if(old.poly)map.removeLayer(old.poly);S.routes=S.routes.filter(r=>r.id!==editId);S.days.forEach(d=>{d.items=d.items.filter(i=>!(i.type==='route'&&i.id===editId));});}}
@@ -866,7 +867,7 @@ function renderRoutes(){
     return '<div class="rtc"><div class="rth"><span class="rnum">#'+(i+1)+'</span><span class="rname">'+esc(r.fromName)+' → '+esc(r.toName)+'</span><button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')">✏️</button><button class="btn br bic bsm" onclick="delRoute('+r.id+')">🗑</button></div>'
       +'<div class="rmeta"><span>'+(MI[r.mode]||'🚗')+'</span><span>🛣️ <b>'+r.dist+'km</b></span>'+(r.dur?'<span>⏱ <b>'+fmtD(r.dur)+'</b></span>':'')+(day?'<span>📅 <b>'+esc(day.title)+'</b></span>':'')+'</div>'
       +(tot?'<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">'+chips.map(c=>'<span class="cost-chip">'+c+'</span>').join('')+(chips.length>1?'<span class="cost-chip" style="background:rgba(184,134,11,.18);">= $'+tot.toFixed(2)+'</span>':'')+'</div>':'')
-      +'<button class="btn bg bsm" style="margin-top:4px;" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly){closeDrawer();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">🗺️ Show</button></div>';
+      +'<button class="btn bg bsm" style="margin-top:4px;" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">🗺️ Show</button></div>';
   }).join('');
 }
 
@@ -978,7 +979,7 @@ qs('#btn-calc').addEventListener('click',()=>{const f=qs('#rf').value,t=qs('#rt'
 ['f-consump','f-price'].forEach(id=>qs('#'+id).addEventListener('input',()=>renderRoutes()));
 // GPS
 qs('#btn-gon').addEventListener('click',startGPS);qs('#btn-goff').addEventListener('click',stopGPS);
-qs('#t-gpsq').addEventListener('click',()=>{if(S.gposLL){closeDrawer();map.flyTo(S.gposLL,15,{duration:.7});return;}if(!('geolocation' in navigator)){toast('No geolocation','err');return;}navigator.geolocation.getCurrentPosition(pos=>{const ll=L.latLng(pos.coords.latitude,pos.coords.longitude);setGPos(ll);closeDrawer();map.flyTo(ll,15,{duration:.7});if(!S.gps)startGPS();},()=>toast('Location denied','err'),{enableHighAccuracy:true});});
+qs('#t-gpsq').addEventListener('click',()=>{if(S.gposLL){closeDrawerMobile();map.flyTo(S.gposLL,15,{duration:.7});return;}if(!('geolocation' in navigator)){toast('No geolocation','err');return;}navigator.geolocation.getCurrentPosition(pos=>{const ll=L.latLng(pos.coords.latitude,pos.coords.longitude);setGPos(ll);closeDrawerMobile();map.flyTo(ll,15,{duration:.7});if(!S.gps)startGPS();},()=>toast('Location denied','err'),{enableHighAccuracy:true});});
 // Save / load
 ['btn-savh','btn-savh2','btn-save'].forEach(id=>qs('#'+id)&&qs('#'+id).addEventListener('click',saveTrip));
 ['btn-lodh','btn-lodh2','btn-load'].forEach(id=>qs('#'+id)&&qs('#'+id).addEventListener('click',()=>qs('#finp').click()));
