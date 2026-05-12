@@ -281,6 +281,12 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 
 /* make room for topbar */
 .leaflet-top{top:calc(var(--tb) + 8px)!important;}
+
+/* Desktop: drawer pushes no backdrop, stays semi-transparent */
+@media(min-width:769px){
+  #drawer-backdrop{display:none!important;}
+  #drawer{box-shadow:3px 0 20px rgba(0,0,0,.12);}
+}
 </style>
 </head>
 <body>
@@ -323,7 +329,7 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 <div id="drawer">
   <div id="dhdr">
     <div id="dhdr-r1">
-      <h2>Road<em>Trip</em><span id="dhdr-ver">v8</span></h2>
+      <h2>Road<em>Trip</em><span id="dhdr-ver"></span></h2>
       <button class="dib" id="t-theme2">☀️</button>
       <button class="dib" id="btn-savh2" title="Save">💾</button>
       <button class="dib" id="btn-lodh2" title="Load">📂</button>
@@ -458,7 +464,7 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
           <div style="background:rgba(212,146,10,.06);border:1px solid rgba(212,146,10,.18);border-radius:var(--rs);padding:8px;margin-top:5px;" class="gd-setup">
             <p style="font-size:.63rem;color:var(--muted);margin-bottom:4px;line-height:1.6;">Client ID identifies the <b>app</b> — each user logs in with their own account. Free.</p>
             <ol>
-              <li>console.cloud.google.com → New project </li>
+              <li>console.cloud.google.com → New project</li>
               <li>Enable <b>Google Drive API</b> + <b>Identity API</b></li>
               <li>Credentials → OAuth 2.0 Web Client → HTTPS domain</li>
               <li>Replace <code>YOUR_CLIENT_ID</code> in script config</li>
@@ -563,6 +569,7 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
 const APP_VERSION='8.0.0';
+// Version is the single source of truth — displayed in topbar title and drawer header
 /* ===================================================
    GOOGLE DRIVE CONFIG — replace YOUR_CLIENT_ID
    See drawer → Save → Developer setup for instructions
@@ -996,9 +1003,20 @@ document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(S.placing){S.p
 let swX=0;
 document.getElementById('map').addEventListener('touchstart',ev=>{swX=ev.touches[0].clientX;},{passive:true});
 document.getElementById('map').addEventListener('touchend',ev=>{const dx=ev.changedTouches[0].clientX-swX;if(dx>60&&swX<40)openDrawer();},{passive:true});
-document.head.insertAdjacentHTML('beforeend','<style>@keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}</style>');
+document.head.insertAdjacentHTML('beforeend','<style>@keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}
+/* Desktop: drawer pushes no backdrop, stays semi-transparent */
+@media(min-width:769px){
+  #drawer-backdrop{display:none!important;}
+  #drawer{box-shadow:3px 0 20px rgba(0,0,0,.12);}
+}
+</style>');
 window.addEventListener('load',()=>{try{gdInit();}catch(e){}});
+window.addEventListener('resize',()=>{if(window.innerWidth>=769&&!isDrawerOpen())openDrawer();});
+// Inject version string wherever id ends in '-ver'
+qsa('[id$="-ver"]').forEach(el=>el.textContent='v'+APP_VERSION);
 ra();qs('#fbar').style.display='flex';
+// Auto-open drawer on desktop
+if(window.innerWidth>=769)openDrawer();
 toast('RoadTrip Planner v'+APP_VERSION,'ok');
 </script>
 </body>
