@@ -284,6 +284,14 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 
   #drawer{box-shadow:3px 0 20px rgba(0,0,0,.12);}
 }
+
+/* Pinned drawer — map shifts right on desktop */
+@media(min-width:769px){
+  body.drawer-pinned #map{left:var(--pw);transition:left .28s;}
+  body.drawer-pinned #gbadge{left:calc(var(--pw) + 50%);}
+  body.drawer-pinned #map-tb{right:10px;}
+}
+.dib.pin-active{background:var(--acc)!important;border-color:var(--acc)!important;color:#fff!important;}
 </style>
 </head>
 <body>
@@ -330,7 +338,7 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
       <button class="dib" id="t-theme2">☀️</button>
       <button class="dib" id="btn-savh2" title="Save">💾</button>
       <button class="dib" id="btn-lodh2" title="Load">📂</button>
-      <button class="dib" onclick="closeDrawer()" title="Close" style="margin-left:2px;">✕</button>
+      <button class="dib" id="btn-pin" title="Pin panel (desktop only)" onclick="togglePin()" style="margin-left:2px;">📌</button><button class="dib" onclick="closeDrawer()" title="Close" style="margin-left:2px;">✕</button>
     </div>
     <input id="tname" type="text" placeholder="Trip name..." value="My Road Trip">
   </div>
@@ -374,8 +382,9 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 
   <!-- Days -->
   <div class="panel" id="panel-days">
-    <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;">
-      <button class="btn ba bsm bfw" id="btn-addd">+ Add Day</button>
+    <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:5px;">
+      <button class="btn ba bsm" id="btn-addd" style="flex:1;">+ Add Day</button>
+      <button class="btn bg bsm" id="btn-shift-dates" title="Shift all dates">&#x1F4C5; Shift dates</button>
     </div>
     <div class="pbd" id="day-list"></div>
   </div>
@@ -412,6 +421,19 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
         <div class="fr2">
           <div><label class="lbl">Fixed cost ($)</label><input class="inp" id="r-cost" type="number" min="0" step=".01" placeholder="0.00"></div>
           <div><label class="lbl">Manual dist. (km)</label><input class="inp" id="r-manual-dist" type="number" min="0" step=".1" placeholder="auto"></div>
+        </div>
+        <div class="fld">
+          <label class="lbl">Route color</label>
+          <div class="crow" id="rt-colors" style="margin-top:4px;">
+            <div class="csw on" style="background:#1d56d4" data-rc="#1d56d4"></div>
+            <div class="csw" style="background:#15803d" data-rc="#15803d"></div>
+            <div class="csw" style="background:#d4920a" data-rc="#d4920a"></div>
+            <div class="csw" style="background:#c81e1e" data-rc="#c81e1e"></div>
+            <div class="csw" style="background:#9333ea" data-rc="#9333ea"></div>
+            <div class="csw" style="background:#0e7eb5" data-rc="#0e7eb5"></div>
+            <div class="csw" style="background:#b01e6a" data-rc="#b01e6a"></div>
+            <div class="csw" style="background:#c94f14" data-rc="#c94f14"></div>
+          </div>
         </div>
         <button class="btn bb bfw" id="btn-calc">Calculate Route →</button>
       </div>
@@ -556,7 +578,57 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
     <div><label class="lbl">Fixed cost ($)</label><input class="inp" id="re-cost" type="number" min="0" step=".01" placeholder="0.00"></div>
     <div><label class="lbl">Manual dist (km)</label><input class="inp" id="re-manual-dist" type="number" min="0" step=".1" placeholder="auto"></div>
   </div>
+  <div class="fld">
+    <label class="lbl">Route color</label>
+    <div class="crow" id="re-colors" style="margin-top:4px;">
+      <div class="csw on" style="background:#1d56d4" data-rc2="#1d56d4"></div>
+      <div class="csw" style="background:#15803d" data-rc2="#15803d"></div>
+      <div class="csw" style="background:#d4920a" data-rc2="#d4920a"></div>
+      <div class="csw" style="background:#c81e1e" data-rc2="#c81e1e"></div>
+      <div class="csw" style="background:#9333ea" data-rc2="#9333ea"></div>
+      <div class="csw" style="background:#0e7eb5" data-rc2="#0e7eb5"></div>
+      <div class="csw" style="background:#b01e6a" data-rc2="#b01e6a"></div>
+      <div class="csw" style="background:#c94f14" data-rc2="#c94f14"></div>
+    </div>
+  </div>
   <div class="mfoot"><button class="btn bg" id="re-cancel">Cancel</button><button class="btn bb" id="re-save">Recalculate &amp; Save</button></div>
+</div></div>
+
+
+<!-- Shift Days Modal -->
+<div id="shiftmbk" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:13px;">
+<div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:18px;width:100%;max-width:380px;box-shadow:var(--sh2);">
+  <h2 style="font-family:var(--head);font-weight:900;font-size:.94rem;margin-bottom:11px;">&#x1F4C5; Shift All Dates</h2>
+  <p style="font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.6;">Move all days forward or backward. Set a new start date, or enter a delta.</p>
+  <div class="fr2">
+    <div><label class="lbl">New start date</label><input class="inp" type="date" id="shift-start"></div>
+    <div><label class="lbl">Shift by (days)</label><input class="inp" type="number" id="shift-delta" placeholder="+9 or -3"></div>
+  </div>
+  <div id="shift-preview" style="font-size:.67rem;color:var(--muted);margin-bottom:8px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:8px;display:none;max-height:140px;overflow-y:auto;line-height:1.8;"></div>
+  <div class="mfoot">
+    <button class="btn bg" id="shift-cancel">Cancel</button>
+    <button class="btn bg" id="shift-preview-btn">Preview</button>
+    <button class="btn ba" id="shift-apply">Apply</button>
+  </div>
+</div></div>
+
+<!-- Split Route Modal -->
+<div id="smbk" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:13px;">
+<div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:18px;width:100%;max-width:440px;max-height:92vh;overflow-y:auto;box-shadow:var(--sh2);">
+  <h2 style="font-family:var(--head);font-weight:900;font-size:.94rem;margin-bottom:11px;">&#x2702;&#xFE0F; Split Route</h2>
+  <p id="split-desc" style="font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.6;"></p>
+  <div class="fld"><label class="lbl">Split via existing POI</label><select class="inp" id="split-poi"><option value="">— Select a POI —</option></select></div>
+  <div style="text-align:center;font-size:.7rem;color:var(--muted);margin:6px 0;">— or —</div>
+  <div class="fld">
+    <label class="lbl">Split via point on map</label>
+    <button class="btn bg bfw" id="btn-split-map">&#x1F4CD; Click on map to pick a point</button>
+    <div id="split-map-pt" style="font-size:.67rem;color:var(--green);margin-top:4px;display:none;"></div>
+  </div>
+  <div class="fld"><label class="lbl">Name for the new mid-point POI</label><input class="inp" id="split-poi-name" type="text" placeholder="e.g. Waypoint, Rest stop..."></div>
+  <div class="mfoot">
+    <button class="btn bg" id="split-cancel">Cancel</button>
+    <button class="btn ba" id="split-do">&#x2702;&#xFE0F; Split</button>
+  </div>
 </div></div>
 
 <input type="file" id="finp" accept=".json" style="display:none;">
@@ -579,6 +651,7 @@ function nid(){return++_id;}
 
 const S={
   pois:[],routes:[],days:[],
+  rtCol:'#1d56d4',rtCol2:'#1d56d4',
   col:'#c94f14',editing:null,placing:false,pendLL:null,
   drawerWasOpen:false, /* remember drawer state before map action */
   gps:false,watchId:null,gposLL:null,gpsMk:null,
@@ -823,7 +896,7 @@ async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
   if(mode==='manual'){
     dist=+(manualDist||from.marker.getLatLng().distanceTo(to.marker.getLatLng())/1000).toFixed(1);
     dur=0;coords=[[from.lat,from.lng],[to.lat,to.lng]];
-    poly=L.polyline(coords,{color:RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map);
+    poly=L.polyline(coords,{color:S.rtCol||RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map);
     closeDrawerMobile();map.fitBounds(L.latLngBounds(coords),{padding:[50,50]});
   }else{
     toast('Calculating...','');
@@ -833,20 +906,20 @@ async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
       if(data.code!=='Ok'){toast('Route not found','err');return;}
       dist=+(data.routes[0].distance/1000).toFixed(1);dur=Math.round(data.routes[0].duration/60);
       coords=data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
-      poly=L.polyline(coords,{color:RCOL[mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:mode==='foot'?'8 5':null}).addTo(map);
+      poly=L.polyline(coords,{color:S.rtCol||RCOL[mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:mode==='foot'?'8 5':null}).addTo(map);
       closeDrawerMobile();map.fitBounds(poly.getBounds(),{padding:[50,50]});
     }catch(e){toast('Connection error','err');return;}
   }
   if(editId){const old=S.routes.find(r=>r.id===editId);if(old){if(old.poly)map.removeLayer(old.poly);S.routes=S.routes.filter(r=>r.id!==editId);S.days.forEach(d=>{d.items=d.items.filter(i=>!(i.type==='route'&&i.id===editId));});}}
   const rid=editId||nid();
-  const rt={id:rid,fromId:from.id,toId:to.id,fromName:from.name,toName:to.name,mode,dist,dur,coords,poly,dayId:dayId||null,fixedCost:fc};
+  const rt={id:rid,fromId:from.id,toId:to.id,fromName:from.name,toName:to.name,mode,dist,dur,coords,poly,dayId:dayId||null,fixedCost:fc,color:S.rtCol||RCOL[mode]||'#1d56d4'};
   S.routes.push(rt);
   if(dayId){const d=S.days.find(x=>x.id==dayId);if(d&&!d.items.some(i=>i.type==='route'&&i.id===rid))d.items.push({type:'route',id:rid});}
   ra();const tc=routeCost(rt);toast(dist+'km'+(dur?' · '+fmtD(dur):'')+(tc?' · $'+tc.toFixed(2):'')+' ✓','ok');return rt;
 }
 async function refreshRt(pid){for(const r of S.routes.filter(r=>r.fromId===pid||r.toId===pid)){toast('Updating route…','');await calcRoute(r.fromId,r.toId,r.mode,r.dayId,r.id,r.fixedCost,r.mode==='manual'?r.dist:null);}}
 function delRoute(id){const i=S.routes.findIndex(r=>r.id===id);if(i<0)return;if(S.routes[i].poly)map.removeLayer(S.routes[i].poly);S.routes.splice(i,1);S.days.forEach(d=>{d.items=d.items.filter(i=>!(i.type==='route'&&i.id===id));});ra();}
-function openRouteEdit(id){S.editRid=id;const r=S.routes.find(x=>x.id===id);if(!r)return;fillRS('ref','ret','red');qs('#ref').value=r.fromId;qs('#ret').value=r.toId;qs('#rem').value=r.mode;qs('#red').value=r.dayId||'';qs('#re-cost').value=r.fixedCost||'';qs('#re-manual-dist').value=r.mode==='manual'?r.dist:'';qs('#rmbk').classList.add('on');}
+function openRouteEdit(id){S.editRid=id;const r=S.routes.find(x=>x.id===id);if(!r)return;fillRS('ref','ret','red');qs('#ref').value=r.fromId;qs('#ret').value=r.toId;qs('#rem').value=r.mode;qs('#red').value=r.dayId||'';qs('#re-cost').value=r.fixedCost||'';qs('#re-manual-dist').value=r.mode==='manual'?r.dist:'';S.rtCol2=r.color||'#1d56d4';qsa('[data-rc2]').forEach(function(s2){s2.classList.toggle('on',s2.dataset.rc2===S.rtCol2);});qs('#rmbk').classList.add('on');}
 function fillRS(f,t,d){
   const po='<option value="">— POI —</option>'+S.pois.map(p=>'<option value="'+p.id+'">'+(CATS[p.cat]||'📍')+' '+esc(p.name)+'</option>').join('');
   if(f)qs('#'+f).innerHTML=po;if(t)qs('#'+t).innerHTML=po;
@@ -861,10 +934,10 @@ function renderRoutes(){
     const day=r.dayId?S.days.find(d=>d.id===r.dayId):null;
     const tot=routeCost(r);const fuel=routeFuel(r);
     const chips=[];if(fuel>0)chips.push('⛽ $'+fuel.toFixed(2));if(r.fixedCost>0)chips.push('🎫 $'+r.fixedCost.toFixed(2));
-    return '<div class="rtc"><div class="rth"><span class="rnum">#'+(i+1)+'</span><span class="rname">'+esc(r.fromName)+' → '+esc(r.toName)+'</span><button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')">✏️</button><button class="btn br bic bsm" onclick="delRoute('+r.id+')">🗑</button></div>'
+    return '<div class="rtc"><div class="rth"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(r.color||'#1d56d4')+';margin-right:3px;"></span><span class="rnum">#'+(i+1)+'</span><span class="rname">'+esc(r.fromName)+' → '+esc(r.toName)+'</span><button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')">✏️</button><button class="btn br bic bsm" onclick="delRoute('+r.id+')">🗑</button></div>'
       +'<div class="rmeta"><span>'+(MI[r.mode]||'🚗')+'</span><span>🛣️ <b>'+r.dist+'km</b></span>'+(r.dur?'<span>⏱ <b>'+fmtD(r.dur)+'</b></span>':'')+(day?'<span>📅 <b>'+esc(day.title)+'</b></span>':'')+'</div>'
       +(tot?'<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">'+chips.map(c=>'<span class="cost-chip">'+c+'</span>').join('')+(chips.length>1?'<span class="cost-chip" style="background:rgba(184,134,11,.18);">= $'+tot.toFixed(2)+'</span>':'')+'</div>':'')
-      +'<button class="btn bg bsm" style="margin-top:4px;" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">🗺️ Show</button></div>';
+      +'<button class="btn bg bsm" style="margin-top:4px;" onclick="(function(){var r2=S.routes.find(function(x){return x.id==='+r.id+';});if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">🗺️ Show</button> <button class=\'btn bg bsm\' style=\'margin-top:4px;\' onclick=\'openSplitModal('+r.id+')\'>✂️ Split</button></div>';
   }).join('');
 }
 
@@ -921,10 +994,10 @@ async function gdList(){if(!S.gd.token){toast('Sign in first','err');return;}con
 async function gdLoad(fid,name){toast('Loading...','');try{const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fid+'?alt=media',{headers:{Authorization:'Bearer '+S.gd.token}});loadData(await r.text());toast('Loaded: '+name,'ok');}catch(e){toast('Load failed','err');}}
 
 /* ===== SAVE/LOAD ===== */
-function tripData(){const fp=getFP();return{appVersion:APP_VERSION,savedAt:new Date().toISOString(),tripName:qs('#tname').value,fuelSettings:{consump:fp.c,price:fp.p},pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayId:p.dayId,cost:p.cost||0})),routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,coords:r.coords,dayId:r.dayId,fixedCost:r.fixedCost||0})),days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
+function tripData(){const fp=getFP();return{appVersion:APP_VERSION,savedAt:new Date().toISOString(),tripName:qs('#tname').value,fuelSettings:{consump:fp.c,price:fp.p},pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayId:p.dayId,cost:p.cost||0})),routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,coords:r.coords,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4'})),days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
 }
 function saveTrip(){const data=tripData();const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=data.tripName.replace(/\s+/g,'_')+'_v'+APP_VERSION+'.json';a.click();toast('Saved!','ok');}
-function loadData(json){try{const d=JSON.parse(json);clearAll(true);qs('#tname').value=d.tripName||d.name||'';if(d.fuelSettings){if(d.fuelSettings.consump)qs('#f-consump').value=d.fuelSettings.consump;if(d.fuelSettings.price)qs('#f-price').value=d.fuelSettings.price;}(d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));(d.pois||[]).forEach(p=>addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayId:p.dayId?Number(p.dayId):null,cost:+(p.cost||0)}));fillRS('rf','rt','rd');(d.routes||[]).forEach(r=>{const poly=(r.mode==='manual')?L.polyline(r.coords,{color:RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map):L.polyline(r.coords,{color:RCOL[r.mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:r.mode==='foot'?'8 5':null}).addTo(map);S.routes.push(Object.assign({},r,{id:Number(r.id),fromId:Number(r.fromId),toId:Number(r.toId),dayId:r.dayId?Number(r.dayId):null,fixedCost:+(r.fixedCost||0),poly}));});S.pois.forEach(p=>{if(p.dayId&&!S.days.find(x=>x.id===p.dayId))p.dayId=null;});ra();if(S.pois.length)map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[50,50]});const ver=d.appVersion?'v'+d.appVersion:'legacy';toast('Loaded ('+ver+', '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'?')+')','ok');}catch(e){toast('Invalid JSON','err');console.error(e);}}
+function loadData(json){try{const d=JSON.parse(json);clearAll(true);qs('#tname').value=d.tripName||d.name||'';if(d.fuelSettings){if(d.fuelSettings.consump)qs('#f-consump').value=d.fuelSettings.consump;if(d.fuelSettings.price)qs('#f-price').value=d.fuelSettings.price;}(d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));(d.pois||[]).forEach(p=>addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayId:p.dayId?Number(p.dayId):null,cost:+(p.cost||0)}));fillRS('rf','rt','rd');(d.routes||[]).forEach(r=>{const poly=(r.mode==='manual')?L.polyline(r.coords,{color:r.color||RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map):L.polyline(r.coords,{color:r.color||RCOL[r.mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:r.mode==='foot'?'8 5':null}).addTo(map);S.routes.push(Object.assign({},r,{id:Number(r.id),fromId:Number(r.fromId),toId:Number(r.toId),dayId:r.dayId?Number(r.dayId):null,fixedCost:+(r.fixedCost||0),color:r.color||'#1d56d4',poly}));});S.pois.forEach(p=>{if(p.dayId&&!S.days.find(x=>x.id===p.dayId))p.dayId=null;});ra();if(S.pois.length)map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[50,50]});const ver=d.appVersion?'v'+d.appVersion:'legacy';toast('Loaded ('+ver+', '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'?')+')','ok');}catch(e){toast('Invalid JSON','err');console.error(e);}}
 function clearAll(s){S.pois.forEach(p=>map.removeLayer(p.marker));S.routes.forEach(r=>{if(r.poly)map.removeLayer(r.poly);});clearLines();S.pois.length=0;S.routes.length=0;S.days.length=0;ra();if(!s)toast('Cleared','ok');}
 function expGPX(){const w=S.pois.map(p=>'  <wpt lat="'+p.lat+'" lon="'+p.lng+'"><name>'+esc(p.name)+'</name></wpt>').join('\n');const t=S.routes.map(r=>'  <trk><name>'+esc(r.fromName)+'→'+esc(r.toName)+'</name><trkseg>'+r.coords.map(c=>'<trkpt lat="'+c[0]+'" lon="'+c[1]+'"></trkpt>').join('')+'</trkseg></trk>').join('\n');const b=new Blob(['<?xml version="1.0"?>\n<gpx version="1.1">\n'+w+'\n'+t+'\n</gpx>'],{type:'application/gpx+xml'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='roadtrip.gpx';a.click();toast('GPX exported','ok');}
 
@@ -969,7 +1042,7 @@ qs('#m-save').addEventListener('click',()=>{
 // Route edit modal
 qs('#re-cancel').addEventListener('click',()=>{qs('#rmbk').classList.remove('on');S.editRid=null;});
 qs('#rmbk').addEventListener('click',ev=>{if(ev.target===ev.currentTarget){qs('#rmbk').classList.remove('on');S.editRid=null;}});
-qs('#re-save').addEventListener('click',async()=>{const f=qs('#ref').value,t=qs('#ret').value,m=qs('#rem').value,d=qs('#red').value;if(!f||!t){toast('Select start and end','err');return;}qs('#rmbk').classList.remove('on');await calcRoute(Number(f),Number(t),m,d?Number(d):null,S.editRid,+(qs('#re-cost').value||0),+(qs('#re-manual-dist').value||0));S.editRid=null;});
+qs('#re-save').addEventListener('click',async()=>{const f=qs('#ref').value,t=qs('#ret').value,m=qs('#rem').value,d=qs('#red').value;if(!f||!t){toast('Select start and end','err');return;}qs('#rmbk').classList.remove('on');S.rtCol=S.rtCol2;await calcRoute(Number(f),Number(t),m,d?Number(d):null,S.editRid,+(qs('#re-cost').value||0),+(qs('#re-manual-dist').value||0));S.editRid=null;});
 // Calc route — close drawer to show map result
 qs('#btn-calc').addEventListener('click',()=>{const f=qs('#rf').value,t=qs('#rt').value;if(!f||!t){toast('Select From and To POIs','err');return;}hideForMap();calcRoute(Number(f),Number(t),qs('#rm').value,qs('#rd').value?Number(qs('#rd').value):null,null,+(qs('#r-cost').value||0),+(qs('#r-manual-dist').value||0)).then(()=>restoreDrawer());});
 // Finance live update
@@ -1004,11 +1077,145 @@ document.getElementById('map').addEventListener('touchend',ev=>{const dx=ev.chan
 (function(){var s=document.createElement('style');s.textContent='@keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}@keyframes gpa{0%,100%{opacity:1}50%{opacity:.28}}';document.head.appendChild(s);})();
 window.addEventListener('load',()=>{try{gdInit();}catch(e){}});
 window.addEventListener('resize',()=>{if(window.innerWidth>=769&&!isDrawerOpen())openDrawer();});
+/* ===== DRAWER PIN ===== */
+var drawerPinned=localStorage.getItem('rtp_pin')==='1';
+function applyPin(){
+  var btn=qs('#btn-pin');
+  if(drawerPinned){document.body.classList.add('drawer-pinned');if(btn)btn.classList.add('pin-active');}
+  else{document.body.classList.remove('drawer-pinned');if(btn)btn.classList.remove('pin-active');}
+}
+function togglePin(){
+  if(window.innerWidth<769)return;
+  drawerPinned=!drawerPinned;
+  localStorage.setItem('rtp_pin',drawerPinned?'1':'0');
+  applyPin();
+  if(drawerPinned)openDrawer();
+}
+
+/* ===== SHIFT ALL DATES ===== */
+function openShiftModal(){
+  var first=S.days.find(function(d){return d.date;});
+  if(first)qs('#shift-start').value=first.date;
+  qs('#shift-delta').value='';
+  var el=qs('#shift-preview');el.style.display='none';el._delta=0;
+  qs('#shiftmbk').style.display='flex';
+}
+function calcShiftDelta(){
+  var startVal=qs('#shift-start').value;
+  var deltaVal=parseInt(qs('#shift-delta').value)||0;
+  if(startVal&&!deltaVal){
+    var first=S.days.find(function(d){return d.date;});
+    if(first){return Math.round((new Date(startVal)-new Date(first.date))/86400000);}
+  }
+  return deltaVal;
+}
+function previewShift(){
+  var delta=calcShiftDelta();
+  var el=qs('#shift-preview');
+  if(!delta){el.style.display='none';return;}
+  el._delta=delta;
+  el.innerHTML=S.days.map(function(d,i){
+    if(!d.date)return (i+1)+'. '+esc(d.title)+': <span style="color:var(--muted)">no date</span>';
+    var dt=new Date(d.date);dt.setDate(dt.getDate()+delta);
+    return (i+1)+'. '+esc(d.title)+': <span style="color:var(--muted)">'+d.date+'</span> &rarr; <b style="color:var(--acc)">'+dt.toISOString().slice(0,10)+'</b>';
+  }).join('<br>');
+  el.style.display='block';
+}
+function applyShift(){
+  var el=qs('#shift-preview');
+  var delta=el._delta||calcShiftDelta();
+  if(!delta){toast('Enter a delta or new start date','err');return;}
+  S.days.forEach(function(d){
+    if(!d.date)return;
+    var dt=new Date(d.date);dt.setDate(dt.getDate()+delta);
+    d.date=dt.toISOString().slice(0,10);
+  });
+  qs('#shiftmbk').style.display='none';
+  ra();
+  toast('Dates shifted '+(delta>0?'+':'')+delta+' days','ok');
+}
+
+/* ===== SPLIT ROUTE ===== */
+var splitRouteId=null,splitMapLL=null,splitPickingMap=false;
+function openSplitModal(rid){
+  splitRouteId=rid;splitMapLL=null;splitPickingMap=false;
+  var r=S.routes.find(function(x){return x.id===rid;});if(!r)return;
+  qs('#split-desc').textContent='Split "'+r.fromName+' to '+r.toName+'" via a mid-point POI.';
+  qs('#split-poi').innerHTML='<option value="">Select a POI</option>'+
+    S.pois.filter(function(p){return p.id!==r.fromId&&p.id!==r.toId;})
+    .map(function(p){return '<option value="'+p.id+'">'+(CATS[p.cat]||'X')+' '+esc(p.name)+'</option>';}).join('');
+  qs('#split-poi-name').value='Waypoint';
+  qs('#split-map-pt').style.display='none';
+  qs('#smbk').style.display='flex';
+}
+function closeSplitModal(){
+  qs('#smbk').style.display='none';
+  splitRouteId=null;splitMapLL=null;splitPickingMap=false;
+  map.getContainer().style.cursor='';
+}
+map.on('click',function(e){
+  if(!splitPickingMap)return;
+  splitPickingMap=false;splitMapLL=e.latlng;
+  map.getContainer().style.cursor='';
+  qs('#split-map-pt').textContent='Lat '+e.latlng.lat.toFixed(5)+' Lng '+e.latlng.lng.toFixed(5);
+  qs('#split-map-pt').style.display='block';
+  qs('#smbk').style.display='flex';
+});
+qs('#btn-split-map').addEventListener('click',function(){
+  qs('#smbk').style.display='none';
+  splitPickingMap=true;map.getContainer().style.cursor='crosshair';
+  toast('Click the map to set the split point','');
+});
+qs('#split-do').addEventListener('click',async function(){
+  var r=S.routes.find(function(x){return x.id===splitRouteId;});
+  if(!r){closeSplitModal();return;}
+  var poiVal=qs('#split-poi').value;
+  var midName=qs('#split-poi-name').value.trim()||'Waypoint';
+  var midPOI=null;
+  if(poiVal){
+    midPOI=S.pois.find(function(p){return p.id===Number(poiVal);});
+  }else if(splitMapLL){
+    midPOI=addPOI(splitMapLL,{name:midName,cat:'general',color:r.color||'#c94f14',locked:true,dayId:r.dayId||null});
+    ra();
+  }else{toast('Select a POI or pick a map point','err');return;}
+  if(!midPOI){toast('Could not create mid-point','err');return;}
+  var dayId=r.dayId,col=r.color,fId=r.fromId,tId=r.toId,mode=r.mode,dist=r.dist;
+  delRoute(splitRouteId);
+  S.rtCol=col||'#1d56d4';
+  await calcRoute(fId,midPOI.id,mode,dayId,null,0,mode==='manual'?+(dist/2).toFixed(1):null);
+  S.rtCol=col||'#1d56d4';
+  await calcRoute(midPOI.id,tId,mode,dayId,null,0,mode==='manual'?+(dist/2).toFixed(1):null);
+  closeSplitModal();
+  toast('Route split into two','ok');
+});
+qs('#split-cancel').addEventListener('click',closeSplitModal);
+qs('#smbk').addEventListener('click',function(ev){if(ev.target===ev.currentTarget)closeSplitModal();});
+
+/* ===== ROUTE COLOR PICKERS ===== */
+qsa('[data-rc]').forEach(function(s){s.addEventListener('click',function(){
+  S.rtCol=s.dataset.rc;
+  qsa('[data-rc]').forEach(function(x){x.classList.toggle('on',x.dataset.rc===S.rtCol);});
+});});
+qsa('[data-rc2]').forEach(function(s){s.addEventListener('click',function(){
+  S.rtCol2=s.dataset.rc2;
+  qsa('[data-rc2]').forEach(function(x){x.classList.toggle('on',x.dataset.rc2===S.rtCol2);});
+});});
+
+/* ===== SHIFT MODAL WIRING ===== */
+qs('#shift-cancel').addEventListener('click',function(){qs('#shiftmbk').style.display='none';});
+qs('#shiftmbk').addEventListener('click',function(ev){if(ev.target===ev.currentTarget)qs('#shiftmbk').style.display='none';});
+qs('#shift-preview-btn').addEventListener('click',previewShift);
+qs('#shift-apply').addEventListener('click',applyShift);
+qs('#shift-start').addEventListener('change',previewShift);
+qs('#shift-delta').addEventListener('input',previewShift);
+qs('#btn-shift-dates').addEventListener('click',openShiftModal);
+
 // Inject version string wherever id ends in '-ver'
 qsa('[id$="-ver"]').forEach(el=>el.textContent='v'+APP_VERSION);
 ra();qs('#fbar').style.display='flex';
 // Auto-open drawer on desktop
 if(window.innerWidth>=769)openDrawer();
+applyPin();
 toast('RoadTrip Planner v'+APP_VERSION,'ok');
 </script>
 </body>
