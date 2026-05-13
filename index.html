@@ -329,6 +329,9 @@ body.drawer-pinned .leaflet-top.leaflet-left{left:var(--pw);}
 <!-- FAB -->
 <button id="fab" title="Add POI">＋</button>
 
+<!-- Hidden file input for JSON load -->
+<input type="file" id="finp" accept=".json" style="display:none;">
+
 <!-- TOP BAR (always visible) -->
 <div id="topbar">
   <button id="btn-drawer">☰</button>
@@ -1244,22 +1247,6 @@ qsa('[data-rc2]').forEach(function(s){s.addEventListener('click',function(){
   qsa('[data-rc2]').forEach(function(x){x.classList.toggle('on',x.dataset.rc2===S.rtCol2);});
 });});
 
-/* ===== SHIFT MODAL WIRING ===== */
-qs('#shift-cancel').addEventListener('click',function(){qs('#shiftmbk').style.display='none';});
-qs('#shiftmbk').addEventListener('click',function(ev){if(ev.target===ev.currentTarget)qs('#shiftmbk').style.display='none';});
-qs('#shift-preview-btn').addEventListener('click',previewShift);
-qs('#shift-apply').addEventListener('click',applyShift);
-qs('#shift-start').addEventListener('change',previewShift);
-qs('#shift-delta').addEventListener('input',previewShift);
-qs('#btn-shift-dates').addEventListener('click',openShiftModal);
-
-// Inject version string wherever id ends in '-ver'
-qsa('[id$="-ver"]').forEach(el=>el.textContent='v'+APP_VERSION);
-ra();qs('#fbar').style.display='flex';
-// Auto-open drawer on desktop
-if(window.innerWidth>=769)openDrawer();
-applyPin();
-toast('RoadTrip Planner v'+APP_VERSION,'ok');
 /* ===== SHIFT MODAL WIRING ===== */
 qs('#shift-cancel').addEventListener('click',function(){qs('#shiftmbk').style.display='none';});
 qs('#shiftmbk').addEventListener('click',function(ev){if(ev.target===ev.currentTarget)qs('#shiftmbk').style.display='none';});
