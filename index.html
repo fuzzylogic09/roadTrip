@@ -685,18 +685,24 @@ const PC={};
 /* ===== DRAWER ===== */
 function isMobile(){return window.innerWidth<769;}
 function isDrawerOpen(){return document.getElementById('drawer').classList.contains('open');}
-function openDrawer(){document.getElementById('drawer').classList.add('open');document.getElementById('drawer-backdrop').classList.add('on');document.getElementById('btn-drawer').classList.add('open');}
+function openDrawer(){
+  document.getElementById('drawer').classList.add('open');
+  // Only show backdrop when NOT pinned on desktop
+  if(!(drawerPinned&&!isMobile()))document.getElementById('drawer-backdrop').classList.add('on');
+  document.getElementById('btn-drawer').classList.add('open');
+}
 function closeDrawer(force){
-  if(!force&&drawerPinned&&!isMobile())return;
+  // Pinned on desktop: never close unless forced via ✕ button (force===true)
+  if(drawerPinned&&!isMobile()&&force!==true)return;
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-backdrop').classList.remove('on');
   document.getElementById('btn-drawer').classList.remove('open');
 }
-function toggleDrawer(){isDrawerOpen()?closeDrawer():openDrawer();}
-function closeDrawerMobile(){if(isMobile()&&!drawerPinned)closeDrawer();}
-/* hideForMap/restoreDrawer only act on mobile */
-function hideForMap(){S.drawerWasOpen=isDrawerOpen();if(isMobile()&&S.drawerWasOpen&&!drawerPinned)closeDrawer();}
-function restoreDrawer(){if(isMobile()&&S.drawerWasOpen){openDrawer();S.drawerWasOpen=false;}}
+function toggleDrawer(){isDrawerOpen()?closeDrawer(true):openDrawer();}
+function closeDrawerMobile(){if(isMobile()&&!drawerPinned)closeDrawer(true);}
+/* hideForMap/restoreDrawer only act on mobile, and never when pinned */
+function hideForMap(){S.drawerWasOpen=isDrawerOpen();if(isMobile()&&!drawerPinned&&S.drawerWasOpen)closeDrawer(true);}
+function restoreDrawer(){if(isMobile()&&!drawerPinned&&S.drawerWasOpen){openDrawer();S.drawerWasOpen=false;}}
 
 /* ===== MAP ===== */
 const map=L.map('map',{zoomControl:true}).setView([46.8,2.3],6);
@@ -1018,11 +1024,49 @@ async function gdList(){if(!S.gd.token){toast('Sign in first','err');return;}con
 async function gdLoad(fid,name){toast('Loading...','');try{const r=await fetch('https://www.googleapis.com/drive/v3/files/'+fid+'?alt=media',{headers:{Authorization:'Bearer '+S.gd.token}});loadData(await r.text());toast('Loaded: '+name,'ok');}catch(e){toast('Load failed','err');}}
 
 /* ===== SAVE/LOAD ===== */
-function tripData(){const fp=getFP();return{appVersion:APP_VERSION,savedAt:new Date().toISOString(),tripName:qs('#tname').value,fuelSettings:{consump:fp.c,price:fp.p},pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayId:p.dayId,cost:p.cost||0})),routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,coords:r.coords,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4'})),days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
+function tripData(){const fp=getFP();return{appVersion:APP_VERSION,savedAt:new Date().toISOString(),tripName:qs('#tname').value,fuelSettings:{consump:fp.c,price:fp.p},pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayId:p.dayId,cost:p.cost||0})),routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4'})),days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
 }
 function saveTrip(){const data=tripData();const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=data.tripName.replace(/\s+/g,'_')+'_v'+APP_VERSION+'.json';a.click();toast('Saved!','ok');}
-function loadData(json){try{const d=JSON.parse(json);clearAll(true);qs('#tname').value=d.tripName||d.name||'';if(d.fuelSettings){if(d.fuelSettings.consump)qs('#f-consump').value=d.fuelSettings.consump;if(d.fuelSettings.price)qs('#f-price').value=d.fuelSettings.price;}(d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));(d.pois||[]).forEach(p=>addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayId:p.dayId?Number(p.dayId):null,cost:+(p.cost||0)}));fillRS('rf','rt','rd');(d.routes||[]).forEach(r=>{const poly=(r.mode==='manual')?L.polyline(r.coords,{color:r.color||RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map):L.polyline(r.coords,{color:r.color||RCOL[r.mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:r.mode==='foot'?'8 5':null}).addTo(map);S.routes.push(Object.assign({},r,{id:Number(r.id),fromId:Number(r.fromId),toId:Number(r.toId),dayId:r.dayId?Number(r.dayId):null,fixedCost:+(r.fixedCost||0),color:r.color||'#1d56d4',poly}));
-bindRouteHover(S.routes[S.routes.length-1]);});S.pois.forEach(p=>{if(p.dayId&&!S.days.find(x=>x.id===p.dayId))p.dayId=null;});ra();if(S.pois.length)map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[50,50]});const ver=d.appVersion?'v'+d.appVersion:'legacy';toast('Loaded ('+ver+', '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'?')+')','ok');}catch(e){toast('Invalid JSON','err');console.error(e);}}
+async function loadData(json){try{
+  const d=JSON.parse(json);
+  clearAll(true);
+  qs('#tname').value=d.tripName||d.name||'';
+  if(d.fuelSettings){if(d.fuelSettings.consump)qs('#f-consump').value=d.fuelSettings.consump;if(d.fuelSettings.price)qs('#f-price').value=d.fuelSettings.price;}
+  (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
+  (d.pois||[]).forEach(p=>addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayId:p.dayId?Number(p.dayId):null,cost:+(p.cost||0)}));
+  fillRS('rf','rt','rd');
+  // Recalculate routes one by one (no stored coords needed)
+  const routes=d.routes||[];
+  if(routes.length){
+    toast('Recalculating '+routes.length+' route(s)…','');
+    for(const r of routes){
+      const savedCol=r.color||'#1d56d4';
+      S.rtCol=savedCol; // preserve color
+      if(r.mode==='manual'){
+        // Manual routes: rebuild directly from POI positions
+        const from=S.pois.find(p=>p.id===Number(r.fromId));
+        const to=S.pois.find(p=>p.id===Number(r.toId));
+        if(from&&to){
+          const coords=[[from.lat,from.lng],[to.lat,to.lng]];
+          const poly=L.polyline(coords,{color:savedCol,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map);
+          const rt=Object.assign({},r,{id:Number(r.id),fromId:Number(r.fromId),toId:Number(r.toId),dayId:r.dayId?Number(r.dayId):null,fixedCost:+(r.fixedCost||0),color:savedCol,coords,poly});
+          S.routes.push(rt);bindRouteHover(rt);
+        }
+      }else{
+        // Auto routes: recalculate via OSRM, using saved id/dayId/fixedCost/color
+        await calcRoute(Number(r.fromId),Number(r.toId),r.mode,r.dayId?Number(r.dayId):null,Number(r.id),+(r.fixedCost||0),null);
+        // Restore exact color after calcRoute (which uses S.rtCol set above)
+        const rt=S.routes.find(x=>x.id===Number(r.id));
+        if(rt){rt.color=savedCol;if(rt.poly)rt.poly.setStyle({color:savedCol});}
+      }
+    }
+  }
+  S.pois.forEach(p=>{if(p.dayId&&!S.days.find(x=>x.id===p.dayId))p.dayId=null;});
+  ra();
+  if(S.pois.length)map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[50,50]});
+  const ver=d.appVersion?'v'+d.appVersion:'legacy';
+  toast('Loaded ('+ver+', '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'?')+')','ok');
+}catch(e){toast('Invalid JSON','err');console.error(e);}}
 function clearAll(s){S.pois.forEach(p=>map.removeLayer(p.marker));S.routes.forEach(r=>{if(r.poly)map.removeLayer(r.poly);});clearLines();S.pois.length=0;S.routes.length=0;S.days.length=0;ra();if(!s)toast('Cleared','ok');}
 function expGPX(){const w=S.pois.map(p=>'  <wpt lat="'+p.lat+'" lon="'+p.lng+'"><name>'+esc(p.name)+'</name></wpt>').join('\n');const t=S.routes.map(r=>'  <trk><name>'+esc(r.fromName)+'→'+esc(r.toName)+'</name><trkseg>'+r.coords.map(c=>'<trkpt lat="'+c[0]+'" lon="'+c[1]+'"></trkpt>').join('')+'</trkseg></trk>').join('\n');const b=new Blob(['<?xml version="1.0"?>\n<gpx version="1.1">\n'+w+'\n'+t+'\n</gpx>'],{type:'application/gpx+xml'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='roadtrip.gpx';a.click();toast('GPX exported','ok');}
 
@@ -1101,17 +1145,25 @@ document.getElementById('map').addEventListener('touchstart',ev=>{swX=ev.touches
 document.getElementById('map').addEventListener('touchend',ev=>{const dx=ev.changedTouches[0].clientX-swX;if(dx>60&&swX<40)openDrawer();},{passive:true});
 (function(){var s=document.createElement('style');s.textContent='@keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}@keyframes gpa{0%,100%{opacity:1}50%{opacity:.28}}';document.head.appendChild(s);})();
 window.addEventListener('load',()=>{try{gdInit();}catch(e){}});
-window.addEventListener('resize',()=>{if(window.innerWidth>=769&&!isDrawerOpen())openDrawer();});
+window.addEventListener('resize',()=>{if(window.innerWidth>=769&&!isDrawerOpen()&&!drawerPinned)openDrawer();});
 
 /* ===== ROUTE HOVER TOOLTIP ===== */
 var routeTooltip=null;
+var routeTooltipTimer=null;
+function closeRouteTooltip(rt){
+  if(routeTooltipTimer)clearTimeout(routeTooltipTimer);
+  routeTooltipTimer=setTimeout(function(){
+    if(routeTooltip){map.closePopup(routeTooltip);routeTooltip=null;}
+    if(rt&&rt.poly)rt.poly.setStyle({weight:rt.mode==='manual'?3:4.5,opacity:.82});
+  },350); // 350ms grace period — enough to move cursor onto popup
+}
 function bindRouteHover(rt){
   if(!rt.poly)return;
+  // Hover: show sticky popup at hover position
   rt.poly.on('mouseover',function(e){
+    if(routeTooltipTimer){clearTimeout(routeTooltipTimer);routeTooltipTimer=null;}
     var day=rt.dayId?S.days.find(function(d){return d.id===rt.dayId;}):null;
-    var fp=getFP();
-    var fuel=routeFuel(rt);
-    var tot=routeCost(rt);
+    var fp=getFP();var fuel=routeFuel(rt);var tot=routeCost(rt);
     var MI2={car:'🚗 Car',foot:'🚶 Walk',bike:'🚲 Bike',manual:'✏️ Manual'};
     var lines=['<b style="font-size:.82rem;font-family:var(--head)">'+esc(rt.fromName)+' → '+esc(rt.toName)+'</b>'];
     lines.push(MI2[rt.mode]||rt.mode);
@@ -1120,33 +1172,73 @@ function bindRouteHover(rt){
     if(fuel>0)lines.push('⛽ Fuel: <b>$'+fuel.toFixed(2)+'</b> ('+fp.c+'L/100·$'+fp.p+'/L)');
     if(rt.fixedCost>0)lines.push('🎫 Fixed cost: <b>$'+rt.fixedCost.toFixed(2)+'</b>');
     if(tot>0)lines.push('💰 Total: <b style="color:var(--gold)">$'+tot.toFixed(2)+'</b>');
-    lines.push('<button class="btn bg bsm" onclick="openSplitModal('+rt.id+')" style="margin-top:4px;">✂️ Split route</button>');
-    routeTooltip=L.popup({closeButton:false,offset:[0,-2],className:'route-hover-popup',autoPan:false})
+    lines.push('<div style="display:flex;gap:5px;margin-top:6px;">'
+      +'<button class="btn bg bsm" onclick="focusRouteInPanel('+rt.id+')">📋 Details</button>'
+      +'<button class="btn bg bsm" onclick="openSplitModal('+rt.id+')">✂️ Split</button>'
+      +'</div>');
+    var popup=L.popup({closeButton:false,offset:[0,-2],className:'route-hover-popup',autoPan:false})
       .setLatLng(e.latlng)
-      .setContent('<div style="font-size:.72rem;line-height:1.75;min-width:180px;">'+lines.join('<br>')+'</div>')
-      .openOn(map);
+      .setContent('<div style="font-size:.72rem;line-height:1.75;min-width:180px;">'+lines.join('<br>')+'</div>');
+    // Cancel close timer when cursor enters popup
+    popup.on('add',function(){
+      setTimeout(function(){
+        var el=popup.getElement();
+        if(!el)return;
+        el.addEventListener('mouseenter',function(){if(routeTooltipTimer){clearTimeout(routeTooltipTimer);routeTooltipTimer=null;}});
+        el.addEventListener('mouseleave',function(){closeRouteTooltip(rt);});
+      },50);
+    });
+    if(routeTooltip)map.closePopup(routeTooltip);
+    routeTooltip=popup;
+    popup.openOn(map);
     rt.poly.setStyle({weight:6,opacity:1});
   });
-  rt.poly.on('mousemove',function(e){if(routeTooltip)routeTooltip.setLatLng(e.latlng);});
-  rt.poly.on('mouseout',function(){
-    if(routeTooltip){map.closePopup(routeTooltip);routeTooltip=null;}
-    rt.poly.setStyle({weight:rt.mode==='manual'?3:4.5,opacity:.82});
-  });
+  // Don't follow mouse — popup stays where it opened (no mousemove handler)
+  rt.poly.on('mouseout',function(){closeRouteTooltip(rt);});
+  // Click: open route panel and highlight route card
+  rt.poly.on('click',function(){focusRouteInPanel(rt.id);});
+}
+function focusRouteInPanel(rid){
+  // Switch to routes tab
+  qsa('.tab').forEach(function(t){t.classList.toggle('on',t.dataset.tab==='routes');});
+  qsa('.panel').forEach(function(p){p.classList.toggle('on',p.id==='panel-routes');});
+  openDrawer();
+  // Scroll to and highlight the route card
+  setTimeout(function(){
+    var el=qs('#rlist');
+    if(!el)return;
+    var cards=el.querySelectorAll('.rtc');
+    var idx=S.routes.findIndex(function(r){return r.id===rid;});
+    if(idx>=0&&cards[idx]){
+      cards[idx].scrollIntoView({behavior:'smooth',block:'nearest'});
+      cards[idx].style.transition='box-shadow .2s,border-color .2s';
+      cards[idx].style.borderColor='var(--acc)';
+      cards[idx].style.boxShadow='0 0 0 2px var(--acc)';
+      setTimeout(function(){cards[idx].style.borderColor='';cards[idx].style.boxShadow='';},1800);
+    }
+  },80);
 }
 
 /* ===== DRAWER PIN ===== */
 var drawerPinned=localStorage.getItem('rtp_pin')==='1';
 function applyPin(){
   var btn=qs('#btn-pin');
-  if(drawerPinned){document.body.classList.add('drawer-pinned');if(btn)btn.classList.add('pin-active');}
-  else{document.body.classList.remove('drawer-pinned');if(btn)btn.classList.remove('pin-active');}
+  if(drawerPinned){
+    document.body.classList.add('drawer-pinned');
+    if(btn)btn.classList.add('pin-active');
+    // Hide backdrop immediately when pinned
+    document.getElementById('drawer-backdrop').classList.remove('on');
+  }else{
+    document.body.classList.remove('drawer-pinned');
+    if(btn)btn.classList.remove('pin-active');
+  }
 }
 function togglePin(){
   if(window.innerWidth<769)return;
   drawerPinned=!drawerPinned;
   localStorage.setItem('rtp_pin',drawerPinned?'1':'0');
   applyPin();
-  if(drawerPinned)openDrawer();
+  if(drawerPinned){openDrawer();}
 }
 
 /* ===== SHIFT ALL DATES ===== */
