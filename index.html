@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="RoadTrip">
 <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22RoadTrip%20Planner%22%2C%22short_name%22%3A%22RoadTrip%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f2ede6%22%2C%22theme_color%22%3A%22%23c94f14%22%2C%22orientation%22%3A%22any%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%3D%2527http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%2527%2520viewBox%3D%270%200%20512%20512%2527%253E%253Crect%2520width%3D%2527512%2527%2520height%3D%2527512%2527%2520rx%3D%2527100%2527%2520fill%3D%2527%2523c94f14%2527%2F%253E%253Ctext%2520x%3D%2527256%2527%2520y%3D%2527340%2527%2520text-anchor%3D%2527middle%2527%2520font-size%3D%2527300%2527%253E%25F0%259F%2597%25BA%253C%2Ftext%253E%253C%2Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%2C%22purpose%22%3A%22any%20maskable%22%7D%5D%7D">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
 <title>RoadTrip Planner</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -636,6 +637,10 @@ body.drawer-pinned .leaflet-top.leaflet-left{left:var(--pw);}
   <p id="split-desc" style="font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.6;"></p>
   <div class="fld"><label class="lbl">Split via existing POI</label><select class="inp" id="split-poi"><option value="">— Select a POI —</option></select></div>
   <div style="text-align:center;font-size:.7rem;color:var(--muted);margin:6px 0;
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
 const APP_VERSION='8.0.0';
 // Version is the single source of truth — displayed in topbar title and drawer header
 /* ===================================================
@@ -854,7 +859,7 @@ function renderDays(){
     return '<div class="dayc" data-dcid="'+d.id+'">'
       +'<div class="dayh"><div class="dayn">'+(di+1)+'</div>'
       +'<input class="dayti" value="'+esc(d.title)+'" onchange="updDay('+d.id+',\'title\',this.value)">'
-      +'<input class="daydi" type="date" value="'+(d.date||'')+'" onchange="updDay('+d.id+',\'date\',this.value)">'
+      +'<input class="daydi" type="date" '+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value)">'
       +'<button class="btn br bic bsm" onclick="delDay('+d.id+')">✕</button></div>'
       +'<div class="dayst"><div class="daystat">📍 <b>'+dpois.length+'</b></div>'+(km?'<div class="daystat">🛣️ <b>'+km.toFixed(0)+'km</b></div>':'')+(dur?'<div class="daystat">⏱ <b>'+fmtD(dur)+'</b></div>':'')+(dc?'<div class="daystat gold">💰 <b>$'+dc.toFixed(2)+'</b></div>':'')+'</div>'
       +'<div class="dayb">'+items+costSummary+'<div class="dayacts"><button class="btn bg bsm" onclick="addNote('+d.id+')">📝 Note</button><button class="btn bg bsm" onclick="focusDay('+d.id+')">🗺️ View</button></div></div>'
@@ -991,7 +996,7 @@ let gdTC=null;
 function gdInit(){if(GOOGLE_CLIENT_ID.includes('YOUR_CLIENT_ID'))return;try{gdTC=google.accounts.oauth2.initTokenClient({client_id:GOOGLE_CLIENT_ID,scope:'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',callback:async r=>{if(r.error){toast('Sign-in failed','err');return;}S.gd.token=r.access_token;await gdFetchUser();gdShowIn();toast('Signed in!','ok');}});}catch(e){}}
 function gdSignIn(){if(GOOGLE_CLIENT_ID.includes('YOUR_CLIENT_ID')){toast('Add your Google Client ID in config','err');return;}if(!gdTC){toast('Google script not ready','err');return;}gdTC.requestAccessToken();}
 async function gdFetchUser(){try{const r=await fetch('https://www.googleapis.com/oauth2/v2/userinfo',{headers:{Authorization:'Bearer '+S.gd.token}});S.gd.user=await r.json();}catch(e){}}
-function gdShowIn(){const u=S.gd.user||{};qs('#gd-out').style.display='none';qs('#gd-in').style.display='block';qs('#gd-name').textContent=u.name||'';qs('#gd-email').textContent=u.email||'';const av=qs('#gd-av');av.innerHTML=u.picture?'<img src="'+u.picture+'" style="width:100%;height:100%;object-fit:cover;">':(u.name||'?')[0].toUpperCase();}
+function gdShowIn(){const u=S.gd.user||{};qs('#gd-out').style.display='none';qs('#gd-in').style.display='block';qs('#gd-name').textContent=u.name||'';qs('#gd-email').textContent=u.email||'';const av=qs('#gd-av');av.innerHTML=u.picture?'<img src="'+u.picture+'" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display=\'none\'">':(u.name||'?')[0].toUpperCase();}
 function gdSignOut(){S.gd={token:null,user:null,folderId:null};qs('#gd-out').style.display='block';qs('#gd-in').style.display='none';toast('Signed out','ok');}
 async function gdFolder(){if(S.gd.folderId)return S.gd.folderId;const qr=await fetch("https://www.googleapis.com/drive/v3/files?q=name='"+DRIVE_FOLDER+"' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id)",{headers:{Authorization:'Bearer '+S.gd.token}});const qd=await qr.json();if(qd.files&&qd.files.length){S.gd.folderId=qd.files[0].id;return S.gd.folderId;}const cr=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+S.gd.token,'Content-Type':'application/json'},body:JSON.stringify({name:DRIVE_FOLDER,mimeType:'application/vnd.google-apps.folder'})});const cd=await cr.json();S.gd.folderId=cd.id;return S.gd.folderId;}
 async function gdSave(){if(!S.gd.token){toast('Sign in to Google first','err');return;}toast('Saving...','');try{const fid=await gdFolder();const name=qs('#tname').value.replace(/\s+/g,'_')+'.json';const content=JSON.stringify(tripData(),null,2);const qr=await fetch("https://www.googleapis.com/drive/v3/files?q=name='"+name+"' and '"+fid+"' in parents and trashed=false&fields=files(id)",{headers:{Authorization:'Bearer '+S.gd.token}});const qd=await qr.json();let resp;if(qd.files&&qd.files.length){resp=await fetch('https://www.googleapis.com/upload/drive/v3/files/'+qd.files[0].id+'?uploadType=media',{method:'PATCH',headers:{Authorization:'Bearer '+S.gd.token,'Content-Type':'application/json'},body:content});}else{const b2='rtp_b';const body='--'+b2+'\r\nContent-Type: application/json\r\n\r\n'+JSON.stringify({name,parents:[fid]})+'\r\n--'+b2+'\r\nContent-Type: application/json\r\n\r\n'+content+'\r\n--'+b2+'--';resp=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+S.gd.token,'Content-Type':'multipart/related; boundary='+b2},body});}if(resp.ok)toast('Saved → '+DRIVE_FOLDER+'/'+name,'ok');else toast('Drive save failed','err');}catch(e){toast('Drive error: '+e.message,'err');}}
@@ -1255,9 +1260,6 @@ ra();qs('#fbar').style.display='flex';
 if(window.innerWidth>=769)openDrawer();
 applyPin();
 toast('RoadTrip Planner v'+APP_VERSION,'ok');
-ction(x){x.classList.toggle('on',x.dataset.rc2===S.rtCol2);});
-});});
-
 /* ===== SHIFT MODAL WIRING ===== */
 qs('#shift-cancel').addEventListener('click',function(){qs('#shiftmbk').style.display='none';});
 qs('#shiftmbk').addEventListener('click',function(ev){if(ev.target===ev.currentTarget)qs('#shiftmbk').style.display='none';});
