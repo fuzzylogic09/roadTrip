@@ -639,7 +639,18 @@ body.drawer-pinned .leaflet-top.leaflet-left{left:var(--pw);}
   <h2 style="font-family:var(--head);font-weight:900;font-size:.94rem;margin-bottom:11px;">&#x2702;&#xFE0F; Split Route</h2>
   <p id="split-desc" style="font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.6;"></p>
   <div class="fld"><label class="lbl">Split via existing POI</label><select class="inp" id="split-poi"><option value="">— Select a POI —</option></select></div>
-  <div style="text-align:center;font-size:.7rem;color:var(--muted);margin:6px 0;
+  <div style="text-align:center;font-size:.7rem;color:var(--muted);margin:6px 0;">— or —</div>
+  <div class="fld"><label class="lbl">New waypoint name</label><input class="inp" id="split-poi-name" type="text" placeholder="Waypoint"></div>
+  <button class="btn bg bfw" id="btn-split-map" style="margin-bottom:7px;">📍 Pick point on map</button>
+  <div id="split-map-pt" style="display:none;font-size:.68rem;color:var(--muted);background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:6px;margin-bottom:7px;"></div>
+  <div class="mfoot">
+    <button class="btn bg" id="split-cancel">Cancel</button>
+    <button class="btn ba" id="split-do">Split Route</button>
+  </div>
+</div></div>
+
+<!-- Toast -->
+<div id="toast"></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
