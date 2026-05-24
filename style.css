@@ -373,3 +373,40 @@ body.drawer-pinned .leaflet-top.leaflet-left{left:var(--pw);}
 
 /* Keyframes */
 @keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}
+
+/* ===== Cost-type toggle in modal ===== */
+.cost-type-toggle{display:flex;border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-top:1px;}
+.ctt-btn{flex:1;border:none;background:var(--surf2);color:var(--muted);font-size:.62rem;font-weight:700;padding:5px 4px;cursor:pointer;font-family:var(--font);transition:all .14s;white-space:nowrap;}
+.ctt-btn.on{background:var(--acc);color:#fff;}
+
+/* ===== Settings panel ===== */
+.settings-section{margin-bottom:14px;}
+.settings-section h3{font-size:.6rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+.settings-section h3::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Font-scale slider row */
+.font-scale-row{display:flex;align-items:center;gap:7px;width:100%;padding-top:4px;}
+.font-scale-row input[type=range]{flex:1;accent-color:var(--acc);}
+
+/* Dynamic font scale via CSS variable — JS writes --fs-scale on :root */
+@media(min-width:769px){
+  /* All the scaled selectors reference --fs-scale set by JS */
+  .pbd,#day-list,.panel{font-size:calc(1rem * var(--fs-scale, 1.25));}
+  .inp{font-size:calc(.79rem * var(--fs-scale, 1.25));}
+  .btn{font-size:calc(.71rem * var(--fs-scale, 1.25));}
+  .lbl{font-size:calc(.58rem * var(--fs-scale, 1.25));}
+  .tab{font-size:calc(.65rem * var(--fs-scale, 1.25));}
+  .fc{font-size:calc(.58rem * var(--fs-scale, 1.25));}
+  .tpill{font-size:calc(.59rem * var(--fs-scale, 1.25));}
+  .poic .pname{font-size:calc(.78rem * var(--fs-scale, 1.25));}
+  .day-item{font-size:calc(.71rem * var(--fs-scale, 1.25));}
+  .daystat{font-size:calc(.62rem * var(--fs-scale, 1.25));}
+  .sec{font-size:calc(.57rem * var(--fs-scale, 1.25));}
+  .dcs-row{font-size:calc(.64rem * var(--fs-scale, 1.25));}
+  .rtc .rname{font-size:calc(.75rem * var(--fs-scale, 1.25));}
+  .cost-chip{font-size:calc(.63rem * var(--fs-scale, 1.25));}
+  .tmsg{font-size:calc(.72rem * var(--fs-scale, 1.25));}
+  .sv{font-size:calc(1.2rem * var(--fs-scale, 1.25));}
+  #tname{font-size:calc(.78rem * var(--fs-scale, 1.25));}
+  #dhdr h2{font-size:calc(1rem * var(--fs-scale, 1.25));}
+}
