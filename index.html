@@ -10,28 +10,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="RoadTrip">
-<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22RoadTrip%20Planner%22%2C%22short_name%22%3A%22RoadTrip%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f2ede6%22%2C%22theme_color%22%3A%22%23c94f14%22%2C%22orientation%22%3A%22any%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%3D%2527http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%2527%2520viewBox%3D%270%200%20512%20512%2527%253E%253Crect%2520width%3D%2527512%2527%2520height%3D%2527512%2527%2520rx%3D%2527100%2527%2520fill%3D%2527%2523c94f14%2527%2F%253E%253Ctext%2520x%3D%2527256%2527%2520y%3D%2527340%2527%2520text-anchor%3D%2527middle%2527%2520font-size%3D%2527300%2527%253E%25F0%259F%2597%25BA%253C%2Ftext%253E%253C%2Fsvg%253E%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%2C%22purpose%22%3A%22any%20maskable%22%7D%5D%7D">
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22RoadTrip%20Planner%22%7D">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
 <title>RoadTrip Planner</title>
-
-<!-- External libs (versioned by CDN) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
-
-<!--
-  Cache-busting strategy:
-  • v=__BUILD__ is a placeholder replaced at deploy time by your build script
-    (e.g. sed, Vite, webpack, or a simple shell one-liner).
-  • If you're not using a build step, the <script> tag at the bottom of this
-    file writes the current timestamp into a <meta> tag and rewrites the hrefs
-    on first load — giving you automatic bust without any build tooling.
--->
 <link id="app-css" rel="stylesheet" href="style.css?v=__BUILD__">
 </head>
 <body>
 <div id="map"></div>
-<!-- Day zone SVG overlay -->
-<svg id="day-zone-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+<!-- Day zone SVG overlay — sized by JS on each redraw -->
+<svg id="day-zone-svg" xmlns="http://www.w3.org/2000/svg" style="position:fixed;top:0;left:0;pointer-events:none;z-index:50;overflow:visible;"></svg>
 
 <!-- GPS live badge -->
 <div id="gbadge">
@@ -49,8 +38,6 @@
 
 <!-- FAB -->
 <button id="fab" title="Add POI">＋</button>
-
-<!-- Hidden file input for JSON load -->
 <input type="file" id="finp" accept=".json" style="display:none;">
 
 <!-- TOP BAR -->
@@ -69,7 +56,6 @@
   </div>
 </div>
 
-<!-- DRAWER BACKDROP -->
 <div id="drawer-backdrop" onclick="closeDrawer(true)"></div>
 
 <!-- DRAWER -->
@@ -80,7 +66,7 @@
       <button class="dib" id="t-theme2">☀️</button>
       <button class="dib" id="btn-savh2" title="Save">💾</button>
       <button class="dib" id="btn-lodh2" title="Load">📂</button>
-      <button class="dib" id="btn-pin" title="Pin panel (desktop only)" onclick="togglePin()" style="margin-left:2px;">📌</button>
+      <button class="dib" id="btn-pin" title="Pin panel (desktop)" onclick="togglePin()" style="margin-left:2px;">📌</button>
       <button class="dib" onclick="closeDrawer(true)" title="Close" style="margin-left:2px;">✕</button>
     </div>
     <input id="tname" type="text" placeholder="Trip name..." value="My Road Trip">
@@ -92,6 +78,7 @@
     <div class="tab" data-tab="routes"><span style="font-size:1rem;">🛣️</span></div>
     <div class="tab" data-tab="gps"><span style="font-size:1rem;">🧭</span></div>
     <div class="tab" data-tab="save"><span style="font-size:1rem;">☁️</span></div>
+    <div class="tab" data-tab="settings"><span style="font-size:1rem;">⚙️</span></div>
   </div>
 
   <div id="fbar">
@@ -106,7 +93,7 @@
     <div class="fc" data-cat="general">📍</div>
   </div>
 
-  <!-- POIs panel -->
+  <!-- ── POIs ── -->
   <div class="panel on" id="panel-pois">
     <div class="pbd">
       <div class="sr">
@@ -123,18 +110,19 @@
     </div>
   </div>
 
-  <!-- Days panel -->
+  <!-- ── Days ── -->
   <div class="panel" id="panel-days">
     <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:5px;">
       <button class="btn ba bsm" id="btn-addd" style="flex:1;">+ Add Day</button>
-      <button class="btn bg bsm" id="btn-shift-dates" title="Shift all dates">&#x1F4C5; Shift dates</button>
+      <button class="btn bg bsm" id="btn-shift-dates">&#x1F4C5; Shift dates</button>
     </div>
     <div class="pbd" id="day-list"></div>
   </div>
 
-  <!-- Routes panel -->
+  <!-- ── Routes ── -->
   <div class="panel" id="panel-routes">
     <div class="pbd">
+      <!-- Fuel -->
       <details class="finance-box" id="finance-details">
         <summary>Fuel &amp; Cost Settings</summary>
         <div class="finance-inner">
@@ -146,15 +134,22 @@
           <div class="finance-total" id="finance-total-rt">⛽ Total fuel cost: <b>$0.00</b></div>
         </div>
       </details>
-      <!-- Restaurant budget -->
+      <!-- Eating budget -->
       <details class="resto-box" id="resto-details">
-        <summary>Restaurant Budgets</summary>
+        <summary>Eating Budget</summary>
         <div class="resto-inner">
-          <div style="font-size:.64rem;color:var(--muted);margin-bottom:7px;line-height:1.6;">Set a daily restaurant/food budget per day. These are added to the grand total.</div>
-          <div id="resto-day-rows"></div>
-          <div class="resto-total" id="resto-total">Total restaurant budget: <b>$0.00</b></div>
+          <div style="font-size:.64rem;color:var(--muted);margin-bottom:8px;line-height:1.65;">
+            Set a <b>default daily eating budget</b> that auto-fills every day. Override individual days below or directly in the Days tab. Changing the default will <b>not</b> overwrite days you've already customised.
+          </div>
+          <div class="fr2" style="margin-bottom:6px;">
+            <div><label class="lbl">Default per day ($)</label><input class="inp" id="eating-default" type="number" min="0" step="1" placeholder="0" oninput="applyEatingDefault(+this.value)"></div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:1px;"><span style="font-size:.62rem;color:var(--muted);line-height:1.5;">Auto-fills days<br>not yet set</span></div>
+          </div>
+          <div id="eating-day-rows"></div>
+          <div class="resto-total" id="eating-total">Total eating budget: <b>$0.00</b></div>
         </div>
       </details>
+      <!-- New route -->
       <div style="background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:10px;margin-bottom:9px;">
         <div class="sec" style="margin-top:0;">New Route</div>
         <div class="fld"><label class="lbl">From</label><select class="inp" id="rf"></select></div>
@@ -194,7 +189,7 @@
     </div>
   </div>
 
-  <!-- GPS panel -->
+  <!-- ── GPS ── -->
   <div class="panel" id="panel-gps">
     <div class="pbd">
       <div class="gbar">
@@ -209,13 +204,13 @@
         <div><div class="tog-label">🧲 Draw Close POIs</div><div class="tog-sub">Lines to POIs within 50 km</div></div>
         <button class="tog" id="tog-lines" onclick="togglePoiLines()"></button>
       </div>
-      <div style="font-size:.68rem;color:var(--muted);margin-bottom:9px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:8px;line-height:1.65;">📱 <b>Tip:</b> Keep this app alongside Google Maps. Location and nearby POIs update live.</div>
+      <div style="font-size:.68rem;color:var(--muted);margin-bottom:9px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:8px;line-height:1.65;">📱 <b>Tip:</b> Keep this app alongside Google Maps.</div>
       <div class="sec" style="margin-top:0;"><span>Nearby POIs</span><span class="sl"></span></div>
       <div id="nearby"></div>
     </div>
   </div>
 
-  <!-- Save panel -->
+  <!-- ── Save / Stats ── -->
   <div class="panel" id="panel-save">
     <div class="pbd">
       <div class="sgrid">
@@ -225,13 +220,9 @@
         <div class="sc"><div class="sv" id="stkm">0</div><div class="sk">km total</div></div>
         <div class="sc" style="grid-column:span 2;"><div class="sv gold" id="stcost">$0.00</div><div class="sk">💰 Total trip cost</div></div>
       </div>
-      <!-- Detailed cost breakdown -->
       <div class="cost-breakdown">
         <h4>💰 Cost breakdown</h4>
-        <div id="cost-breakdown-body">
-          <div class="cbrk-row"><span class="cbrk-label">⛽ Fuel</span><span class="cbrk-val">$0.00</span></div>
-          <div class="cbrk-total"><span>💰 Grand total</span><span>$0.00</span></div>
-        </div>
+        <div id="cost-breakdown-body"></div>
       </div>
       <div class="sec"><span>Google Drive</span><span class="sl"></span></div>
       <div class="gdpanel">
@@ -241,7 +232,6 @@
           <button class="btn bb bfw" id="btn-gsign" style="margin-bottom:7px;">Sign in with Google</button>
           <details><summary style="font-size:.63rem;color:var(--muted);cursor:pointer;font-weight:700;">⚙️ Developer setup</summary>
           <div style="background:rgba(212,146,10,.06);border:1px solid rgba(212,146,10,.18);border-radius:var(--rs);padding:8px;margin-top:5px;" class="gd-setup">
-            <p style="font-size:.63rem;color:var(--muted);margin-bottom:4px;line-height:1.6;">Client ID identifies the <b>app</b> — each user logs in with their own account. Free.</p>
             <ol>
               <li>console.cloud.google.com → New project</li>
               <li>Enable <b>Google Drive API</b> + <b>Identity API</b></li>
@@ -273,6 +263,54 @@
       </div>
     </div>
   </div>
+
+  <!-- ── Settings ── -->
+  <div class="panel" id="panel-settings">
+    <div class="pbd">
+      <div class="sec" style="margin-top:0;"><span>Map overlays</span><span class="sl"></span></div>
+      <div class="tog-row">
+        <div><div class="tog-label">🗺️ Day zone overlays</div><div class="tog-sub">Coloured hand-drawn regions per day</div></div>
+        <button class="tog" id="stog-day-zones" onclick="setSetting('showDayZones',!CFG.showDayZones)"></button>
+      </div>
+      <div class="tog-row" id="stog-zone-titles-row" style="opacity:.5;pointer-events:none;">
+        <div><div class="tog-label">🏷️ Day titles on zones</div><div class="tog-sub">Show day name inside each overlay</div></div>
+        <button class="tog on" id="stog-zone-titles" onclick="setSetting('showZoneTitles',!CFG.showZoneTitles)"></button>
+      </div>
+      <div class="tog-row">
+        <div><div class="tog-label">🏷️ POI labels on map</div><div class="tog-sub">Show name under every POI pin</div></div>
+        <button class="tog" id="stog-poi-labels" onclick="setSetting('showPoiLabels',!CFG.showPoiLabels)"></button>
+      </div>
+      <div class="tog-row">
+        <div><div class="tog-label">🕐 Hourly distance dots</div><div class="tog-sub">Small dot every 1 hr along routes</div></div>
+        <button class="tog on" id="stog-hour-dots" onclick="setSetting('showHourDots',!CFG.showHourDots)"></button>
+      </div>
+
+      <div class="sec"><span>Display</span><span class="sl"></span></div>
+      <div class="tog-row" style="flex-wrap:wrap;gap:5px;">
+        <div style="flex:1;"><div class="tog-label">🔠 Interface font size</div><div class="tog-sub">Scales all drawer text (desktop only)</div></div>
+        <div style="display:flex;align-items:center;gap:7px;width:100%;padding-top:4px;">
+          <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;">S</span>
+          <input type="range" id="font-scale-slider" min="80" max="150" step="5" value="125" style="flex:1;accent-color:var(--acc);" oninput="setFontScale(+this.value)">
+          <span style="font-size:.6rem;color:var(--muted);flex-shrink:0;">XL</span>
+          <span id="font-scale-val" style="font-size:.65rem;font-weight:700;color:var(--acc);min-width:30px;text-align:right;">125%</span>
+        </div>
+      </div>
+      <div class="tog-row">
+        <div><div class="tog-label">🌙 Dark mode</div><div class="tog-sub">Toggle light / dark theme</div></div>
+        <button class="tog" id="stog-dark" onclick="setTheme(document.documentElement.getAttribute('data-theme')!=='dark')"></button>
+      </div>
+
+      <div class="sec"><span>Behaviour</span><span class="sl"></span></div>
+      <div class="tog-row">
+        <div><div class="tog-label">📌 Pin drawer (desktop)</div><div class="tog-sub">Keeps panel open alongside map</div></div>
+        <button class="tog" id="stog-pin" onclick="togglePin()"></button>
+      </div>
+      <div class="tog-row">
+        <div><div class="tog-label">🛰️ Satellite base map</div><div class="tog-sub">Switch between street & satellite</div></div>
+        <button class="tog" id="stog-sat" onclick="toggleSat()"></button>
+      </div>
+    </div>
+  </div>
 </div><!-- /drawer -->
 
 <!-- POI Modal -->
@@ -297,13 +335,25 @@
       </select>
     </div>
   </div>
-  <div class="fld">
-    <label class="lbl">Assign to Days (multi-select)</label>
-    <div id="m-days-list"><div style="font-size:.65rem;color:var(--muted);">No days yet.</div></div>
-    <select id="m-day" style="display:none;"></select>
+  <!-- Cost with per-day / per-total toggle -->
+  <div class="fr2">
+    <div>
+      <label class="lbl">Cost ($)</label>
+      <input class="inp" id="m-cost" type="number" min="0" step=".01" placeholder="0.00">
+    </div>
+    <div>
+      <label class="lbl">Cost type</label>
+      <div class="cost-type-toggle">
+        <button class="ctt-btn on" id="ctt-total" onclick="setCostType('total')">Total</button>
+        <button class="ctt-btn" id="ctt-perday" onclick="setCostType('perday')">Per day ×<span id="ctt-days-count">0</span></button>
+      </div>
+      <div id="ctt-computed" style="font-size:.62rem;color:var(--gold);margin-top:3px;font-weight:700;"></div>
+    </div>
   </div>
   <div class="fld">
-    <label class="lbl">Cost ($)</label><input class="inp" id="m-cost" type="number" min="0" step=".01" placeholder="0.00">
+    <label class="lbl">Assign to Days</label>
+    <div id="m-days-list"><div style="font-size:.65rem;color:var(--muted);">No days yet.</div></div>
+    <select id="m-day" style="display:none;"></select>
   </div>
   <div class="fld"><label class="lbl">Color</label>
     <div class="crow">
@@ -363,7 +413,7 @@
 <div id="shiftmbk" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:13px;">
 <div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:18px;width:100%;max-width:380px;box-shadow:var(--sh2);">
   <h2 style="font-family:var(--head);font-weight:900;font-size:.94rem;margin-bottom:11px;">&#x1F4C5; Shift All Dates</h2>
-  <p style="font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.6;">Move all days forward or backward. Set a new start date, or enter a delta.</p>
+  <p style="font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.6;">Move all days forward or backward.</p>
   <div class="fr2">
     <div><label class="lbl">New start date</label><input class="inp" type="date" id="shift-start"></div>
     <div><label class="lbl">Shift by (days)</label><input class="inp" type="number" id="shift-delta" placeholder="+9 or -3"></div>
@@ -392,32 +442,17 @@
   </div>
 </div></div>
 
-<!-- Toast -->
 <div id="toast"></div>
 
-<!-- External libs -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-
-<!--
-  Auto cache-busting: injects the current Unix timestamp as ?v=TIMESTAMP
-  into both the CSS link and the app.js script tag at page-load time.
-  This runs before app.js so the script tag is ready with the right URL.
-
-  If you use a build pipeline (Vite / Webpack / CI deploy script), replace
-  __BUILD__ in the href/src attributes yourself and remove this inline script.
--->
 <script>
-(function () {
-  var ts = Date.now();
-
-  // Bust the already-loaded CSS link
-  var cssLink = document.getElementById('app-css');
-  if (cssLink) cssLink.href = 'style.css?v=' + ts;
-
-  // Create and inject the app script with a busted URL
-  var s = document.createElement('script');
-  s.src = 'app.js?v=' + ts;
+(function(){
+  var ts=Date.now();
+  var cssLink=document.getElementById('app-css');
+  if(cssLink)cssLink.href='style.css?v='+ts;
+  var s=document.createElement('script');
+  s.src='app.js?v='+ts;
   document.body.appendChild(s);
 })();
 </script>
