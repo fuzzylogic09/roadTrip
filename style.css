@@ -1,3 +1,6 @@
+/* =========================================================
+   RoadTrip Planner — style.css  v8.2.0
+   ========================================================= */
 :root{
   --bg:#f2ede6;--surf:#fff;--surf2:#f8f4ef;--surf3:#ede8e0;
   --border:#ddd7cc;--border2:#ccc5b8;
@@ -7,8 +10,9 @@
   --sh:0 2px 10px rgba(0,0,0,.07);--sh2:0 8px 30px rgba(0,0,0,.11);
   --r:10px;--rs:6px;--rl:14px;
   --font:'Nunito',sans-serif;--head:'Playfair Display',serif;
-  --pw:340px;
+  --pw:360px;
   --tb:50px;
+  --fscale:1;     /* base scale; overridden on desktop */
 }
 [data-theme=dark]{
   --bg:#0d0f15;--surf:#151a25;--surf2:#1b2030;--surf3:#222839;
@@ -16,6 +20,49 @@
   --text:#dce3f0;--muted:#68759a;--muted2:#8892b0;
   --sh:0 2px 10px rgba(0,0,0,.28);--sh2:0 8px 30px rgba(0,0,0,.48);
 }
+
+/* ===== Desktop: +25% font sizes ===== */
+@media(min-width:769px){
+  :root{
+    --pw:380px;
+    --fscale:1.25;
+  }
+  /* Drawer body text */
+  .pbd,#day-list,.panel{font-size:calc(1rem * var(--fscale));}
+  .inp{font-size:calc(.79rem * var(--fscale));}
+  .btn{font-size:calc(.71rem * var(--fscale));}
+  .lbl{font-size:calc(.58rem * var(--fscale));}
+  .tab{font-size:calc(.65rem * var(--fscale));}
+  .fc{font-size:calc(.58rem * var(--fscale));}
+  .tpill{font-size:calc(.59rem * var(--fscale));}
+  .poic .pname{font-size:calc(.78rem * var(--fscale));}
+  .poic .pmeta,.poic .pcost{font-size:calc(.63rem * var(--fscale));}
+  .tag{font-size:calc(.56rem * var(--fscale));}
+  .day-item{font-size:calc(.71rem * var(--fscale));}
+  .daystat{font-size:calc(.62rem * var(--fscale));}
+  .sec{font-size:calc(.57rem * var(--fscale));}
+  .badge{font-size:calc(.56rem * var(--fscale));}
+  .dcs-row{font-size:calc(.64rem * var(--fscale));}
+  .dcs-row.total{font-size:calc(.7rem * var(--fscale));}
+  .rtc .rname{font-size:calc(.75rem * var(--fscale));}
+  .rtc .rmeta{font-size:calc(.64rem * var(--fscale));}
+  .cost-chip{font-size:calc(.63rem * var(--fscale));}
+  .tmsg{font-size:calc(.72rem * var(--fscale));}
+  .nri div{font-size:calc(.76rem * var(--fscale));}
+  .sv{font-size:calc(1.2rem * var(--fscale));}
+  .sk{font-size:calc(.57rem * var(--fscale));}
+  #tname{font-size:calc(.78rem * var(--fscale));}
+  #dhdr h2{font-size:calc(1rem * var(--fscale));}
+  .leaflet-popup-content{font-size:calc(1rem * var(--fscale));}
+  .pt{font-size:calc(.86rem * var(--fscale));}
+  .pd{font-size:calc(.69rem * var(--fscale));}
+  .pr{font-size:calc(.67rem * var(--fscale));}
+  /* Slightly bigger buttons/inputs on desktop */
+  .btn{padding:calc(6px * var(--fscale)) calc(11px * var(--fscale));}
+  .bsm{padding:calc(3px * var(--fscale)) calc(7px * var(--fscale));}
+  .inp{padding:calc(6px * var(--fscale)) calc(9px * var(--fscale));}
+}
+
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow:hidden;font-family:var(--font);background:var(--bg);color:var(--text);transition:background .22s,color .22s;}
 
@@ -153,6 +200,9 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .ptags{display:flex;gap:3px;margin-top:3px;flex-wrap:wrap;}
 .tag{font-size:.56rem;font-weight:700;padding:2px 5px;border-radius:10px;background:var(--surf3);border:1px solid var(--border2);color:var(--muted2);}
 .pacts{display:flex;gap:2px;flex-shrink:0;}
+/* Multi-day badges on POI cards */
+.pday-badges{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;}
+.pday-badge{font-size:.54rem;font-weight:800;padding:1px 5px;border-radius:8px;color:#fff;}
 
 /* ===== FINANCE BOX ===== */
 .finance-box{background:rgba(184,134,11,.06);border:1px solid rgba(184,134,11,.2);border-radius:var(--r);padding:10px;margin-bottom:9px;}
@@ -161,12 +211,21 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .finance-inner{padding-top:9px;}
 .finance-total{background:rgba(184,134,11,.1);border:1px solid rgba(184,134,11,.22);border-radius:var(--rs);padding:6px 9px;margin-top:7px;font-size:.74rem;font-weight:700;color:var(--gold);display:flex;justify-content:space-between;align-items:center;}
 
+/* Restaurant budget box */
+.resto-box{background:rgba(21,128,61,.05);border:1px solid rgba(21,128,61,.18);border-radius:var(--r);padding:10px;margin-bottom:9px;}
+.resto-box summary{font-size:.69rem;font-weight:800;color:var(--green);cursor:pointer;list-style:none;display:flex;align-items:center;gap:5px;outline:none;}
+.resto-box summary::before{content:'🍽️';}
+.resto-inner{padding-top:9px;}
+.resto-day-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.resto-day-label{font-size:.65rem;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.resto-day-input{width:72px;flex-shrink:0;}
+.resto-total{background:rgba(21,128,61,.1);border:1px solid rgba(21,128,61,.22);border-radius:var(--rs);padding:6px 9px;margin-top:7px;font-size:.74rem;font-weight:700;color:var(--green);display:flex;justify-content:space-between;align-items:center;}
+
 /* ===== DAY CARDS ===== */
-/* Increased separation between day cards */
 .dayc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:18px;overflow:hidden;box-shadow:var(--sh);}
 .dayc.dover{border-color:var(--acc2);background:rgba(212,146,10,.05);}
 .dayh{display:flex;align-items:center;gap:5px;padding:7px 10px;background:var(--surf3);border-bottom:1px solid var(--border);}
-.dayn{font-family:var(--head);font-weight:900;font-size:.9rem;color:var(--acc2);min-width:18px;}
+.dayn-bubble{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--acc2);color:#fff;font-family:var(--head);font-weight:900;font-size:.72rem;flex-shrink:0;}
 .dayti{flex:1;background:transparent;border:none;color:var(--text);font-family:var(--font);font-size:.75rem;font-weight:700;outline:none;}
 .daydi{background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--muted);font-family:var(--font);font-size:.63rem;outline:none;width:88px;text-align:right;}
 .daydi:focus{border-color:var(--acc2);}
@@ -188,21 +247,17 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .empty-day{font-size:.7rem;color:var(--muted);padding:7px;text-align:center;border:1.5px dashed var(--border2);border-radius:var(--rs);margin-bottom:3px;}
 .day-dropzone{height:5px;border-radius:3px;margin-bottom:2px;transition:all .12s;}
 .day-dropzone.over{height:18px;background:rgba(201,79,20,.1);border:1.5px dashed var(--acc);}
+/* "Insert day here" button between day cards */
+.day-insert-btn{display:flex;align-items:center;justify-content:center;gap:5px;margin:-10px 0 12px;opacity:0;transition:opacity .18s;}
+.day-insert-btn:hover,.day-list-wrap:hover .day-insert-btn{opacity:1;}
+.day-insert-btn button{background:var(--surf);border:1px dashed var(--border2);border-radius:20px;color:var(--muted);font-size:.6rem;font-weight:700;padding:2px 9px;cursor:pointer;font-family:var(--font);}
+.day-insert-btn button:hover{border-color:var(--acc);color:var(--acc);}
 .day-cost-summary{background:rgba(184,134,11,.07);border:1px solid rgba(184,134,11,.18);border-radius:var(--rs);padding:5px 8px;margin:3px 0 4px;}
 .dcs-row{display:flex;justify-content:space-between;font-size:.64rem;padding:1px 0;}
 .dcs-row.total{font-weight:800;font-size:.7rem;color:var(--gold);border-top:1px solid rgba(184,134,11,.2);margin-top:3px;padding-top:3px;}
 .dcs-row span:first-child{color:var(--muted);}
 .dcs-row span:last-child{font-weight:700;color:var(--text);}
 .dcs-row.total span:last-child{color:var(--gold);}
-
-/* Day number bubble — visual accent */
-.dayn-bubble{
-  display:inline-flex;align-items:center;justify-content:center;
-  width:22px;height:22px;border-radius:50%;
-  background:var(--acc2);color:#fff;
-  font-family:var(--head);font-weight:900;font-size:.72rem;
-  flex-shrink:0;
-}
 
 /* ===== ROUTE CARD ===== */
 .rtc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:8px 10px;margin-bottom:4px;}
@@ -229,12 +284,22 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .nrr{font-family:var(--head);font-weight:900;font-size:.88rem;color:var(--muted);width:15px;flex-shrink:0;}
 .nrr.cl{color:var(--acc2);}
 
-/* ===== SAVE ===== */
+/* ===== SAVE / STATS ===== */
 .sgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;}
 .sc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:10px;}
 .sv{font-family:var(--head);font-weight:900;font-size:1.2rem;color:var(--acc);}
 .sv.gold{color:var(--gold);}
+.sv.green{color:var(--green);}
+.sv.blue{color:var(--blue);}
 .sk{font-size:.57rem;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.06em;}
+/* Detailed cost breakdown */
+.cost-breakdown{background:rgba(184,134,11,.04);border:1px solid rgba(184,134,11,.16);border-radius:var(--r);padding:10px;margin-bottom:10px;}
+.cost-breakdown h4{font-size:.68rem;font-weight:800;color:var(--gold);margin-bottom:7px;display:flex;align-items:center;gap:5px;}
+.cbrk-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);font-size:.68rem;}
+.cbrk-row:last-child{border:none;}
+.cbrk-row .cbrk-label{color:var(--muted);display:flex;align-items:center;gap:4px;}
+.cbrk-row .cbrk-val{font-weight:700;color:var(--text);}
+.cbrk-total{display:flex;justify-content:space-between;padding:6px 0 0;font-size:.74rem;font-weight:800;color:var(--gold);margin-top:3px;border-top:1.5px solid rgba(184,134,11,.25);}
 .gdpanel{background:rgba(29,86,212,.06);border:1px solid rgba(29,86,212,.2);border-radius:var(--r);padding:10px;margin-bottom:8px;}
 .gdpanel h3{font-size:.77rem;font-weight:800;color:var(--blue);margin-bottom:5px;}
 .gd-user-row{display:flex;align-items:center;gap:7px;padding:7px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:6px;}
@@ -258,6 +323,10 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .lrow{display:flex;gap:4px;margin-bottom:4px;}
 .lchip{display:inline-flex;align-items:center;gap:3px;background:rgba(29,86,212,.08);border:1px solid rgba(29,86,212,.18);border-radius:20px;padding:2px 7px;font-size:.62rem;color:var(--blue);text-decoration:none;}
 .lchip:hover{background:rgba(29,86,212,.14);}
+/* Multi-day checkboxes in POI modal */
+#m-days-list{display:flex;flex-direction:column;gap:4px;max-height:100px;overflow-y:auto;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:5px 8px;}
+.mday-row{display:flex;align-items:center;gap:6px;font-size:.71rem;}
+.mday-row input[type=checkbox]{accent-color:var(--acc);}
 
 /* ===== Leaflet popup ===== */
 .leaflet-popup-content-wrapper{background:var(--surf);border:1px solid var(--border2);border-radius:var(--r);color:var(--text);box-shadow:var(--sh2);}
@@ -270,7 +339,6 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .leaflet-control-attribution{background:rgba(255,255,255,.85)!important;}
 [data-theme=dark] .leaflet-control-attribution{background:rgba(13,15,21,.82)!important;color:var(--muted)!important;}
 .leaflet-top{top:calc(var(--tb) + 8px)!important;}
-
 #drawer{box-shadow:3px 0 20px rgba(0,0,0,.12);}
 
 /* Pinned drawer */
@@ -298,11 +366,10 @@ body.drawer-pinned .leaflet-top.leaflet-left{left:var(--pw);}
 .route-hover-popup .leaflet-popup-content{margin:10px 12px;}
 
 /* Route hourly dot markers */
-.route-hour-dot{
-  width:9px;height:9px;border-radius:50%;
-  border:2px solid rgba(255,255,255,.9);
-  box-shadow:0 1px 4px rgba(0,0,0,.25);
-}
+.route-hour-dot{width:9px;height:9px;border-radius:50%;border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.25);}
 
-/* Injected keyframes */
+/* Day zone overlay SVG */
+#day-zone-svg{position:fixed;inset:0;pointer-events:none;z-index:50;}
+
+/* Keyframes */
 @keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}
