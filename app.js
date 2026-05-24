@@ -64,7 +64,7 @@ function applySettings(){
   const satBtn = qs('#stog-sat');
   if(satBtn) satBtn.classList.toggle('on', S.sat);
   // Refresh zones
-  refreshDayZones();
+  scheduleZoneRefresh();
 }
 
 function setFontScale(v){
@@ -149,8 +149,7 @@ function mkGps(){
 map.on('click', e => {
   if(S.placing){ S.placing=false; map.getContainer().style.cursor=''; qs('#fab').classList.remove('cancel'); qs('#fab').title='Add POI'; openModal(e.latlng,''); }
 });
-map.on('moveend', refreshDayZones);
-map.on('zoomend', refreshDayZones);
+// zone refresh listeners are set up inside the DAY ZONE OVERLAY section below
 
 function toggleSat(){
   S.sat = !S.sat;
@@ -282,8 +281,12 @@ function renderEatingBudgetRows(){
 =================================================== */
 function latlngToPixel(ll){
   const pt = map.latLngToContainerPoint(L.latLng(ll[0], ll[1]));
-  return [pt.x, pt.y];
+  // map container may be offset from viewport (e.g. when drawer is pinned)
+  const rect = map.getContainer().getBoundingClientRect();
+  return [pt.x + rect.left, pt.y + rect.top];
 }
+/* --- Geometry helpers --- */
+
 function convexHull(pts){
   if(pts.length < 2) return pts;
   pts = pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
@@ -294,118 +297,166 @@ function convexHull(pts){
   upper.pop(); lower.pop();
   return lower.concat(upper);
 }
+
 function expandHull(hull, pad){
   if(hull.length < 2) return hull;
   const cx=hull.reduce((s,p)=>s+p[0],0)/hull.length;
   const cy=hull.reduce((s,p)=>s+p[1],0)/hull.length;
   return hull.map(([x,y])=>{ const dx=x-cx,dy=y-cy,len=Math.sqrt(dx*dx+dy*dy)||1; return [x+dx/len*pad,y+dy/len*pad]; });
 }
-function smoothPath(pts){
-  if(pts.length < 2) return '';
-  const n=pts.length;
-  let d='M'+pts[0][0]+','+pts[0][1];
-  for(let i=0;i<n;i++){
-    const p0=pts[(i-1+n)%n],p1=pts[i],p2=pts[(i+1)%n],p3=pts[(i+2)%n];
-    const cp1x=p1[0]+(p2[0]-p0[0])/6, cp1y=p1[1]+(p2[1]-p0[1])/6;
-    const cp2x=p2[0]-(p3[0]-p1[0])/6, cp2y=p2[1]-(p3[1]-p1[1])/6;
-    d+=' C'+cp1x+','+cp1y+' '+cp2x+','+cp2y+' '+p2[0]+','+p2[1];
+
+// Remove hull points that are too close together (avoids degenerate Bezier spikes)
+function simplifyHull(pts, minDist){
+  if(pts.length <= 3) return pts;
+  const out=[pts[0]];
+  for(let i=1;i<pts.length;i++){
+    const prev=out[out.length-1], cur=pts[i];
+    const dx=cur[0]-prev[0], dy=cur[1]-prev[1];
+    if(Math.sqrt(dx*dx+dy*dy) >= minDist) out.push(cur);
   }
-  return d+' Z';
+  // Always keep at least 3 unique points
+  return out.length >= 3 ? out : pts.slice(0,3);
 }
+
+// Chaikin subdivision for smooth curves — much safer than Catmull-Rom (no overshoot)
+// Runs `passes` rounds of corner-cutting, then builds a closed SVG path
+function chaikinSmooth(pts, passes=3){
+  let p = pts.slice();
+  for(let pass=0;pass<passes;pass++){
+    const n=p.length, next=[];
+    for(let i=0;i<n;i++){
+      const a=p[i], b=p[(i+1)%n];
+      next.push([0.75*a[0]+0.25*b[0], 0.75*a[1]+0.25*b[1]]);
+      next.push([0.25*a[0]+0.75*b[0], 0.25*a[1]+0.75*b[1]]);
+    }
+    p=next;
+  }
+  if(!p.length) return '';
+  return 'M'+p[0][0]+','+p[0][1]+p.slice(1).map(([x,y])=>' L'+x+','+y).join('')+' Z';
+}
+
 function wobble(pts, seed){
   let r = seed*9301+49297;
-  return pts.map(([x,y])=>{ r=(r*9301+49297)%233280; const rx=(r/233280-.5)*12; r=(r*9301+49297)%233280; const ry=(r/233280-.5)*12; return [x+rx,y+ry]; });
+  return pts.map(([x,y])=>{
+    r=(r*9301+49297)%233280; const rx=(r/233280-.5)*14;
+    r=(r*9301+49297)%233280; const ry=(r/233280-.5)*14;
+    return [x+rx,y+ry];
+  });
+}
+
+/* --- Debounced rAF-based zone refresh --- */
+let _dzRafId = null;
+let _dzPending = false;
+
+// During active map drag: just hide the SVG for zero lag
+map.on('movestart', ()=>{ if(CFG.showDayZones){ svgEl.style.display='none'; } });
+map.on('move',      ()=>{ if(CFG.showDayZones){ svgEl.style.display='none'; } });
+map.on('moveend',   ()=>{ scheduleZoneRefresh(); });
+map.on('zoomend',   ()=>{ scheduleZoneRefresh(); });
+
+function scheduleZoneRefresh(){
+  if(_dzRafId) cancelAnimationFrame(_dzRafId);
+  _dzRafId = requestAnimationFrame(()=>{
+    _dzRafId = null;
+    svgEl.style.display='';
+    refreshDayZones();
+  });
 }
 
 function refreshDayZones(){
   if(!CFG.showDayZones){ svgEl.innerHTML=''; return; }
   const ns = 'http://www.w3.org/2000/svg';
-  // Size SVG to full viewport
   const W = window.innerWidth, H = window.innerHeight;
   svgEl.setAttribute('width', W); svgEl.setAttribute('height', H);
   svgEl.setAttribute('viewBox', '0 0 '+W+' '+H);
   svgEl.innerHTML = '';
 
   S.days.forEach((d, di) => {
-    const pts = [];
+    // Collect geo-space points (lat/lng arrays), convert to pixels once
+    const geoPts = [];
     d.items.forEach(it => {
-      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p) pts.push(latlngToPixel([p.lat,p.lng])); }
-      if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r&&r.coords){ const step=Math.max(1,Math.floor(r.coords.length/40)); for(let i=0;i<r.coords.length;i+=step) pts.push(latlngToPixel(r.coords[i])); } }
+      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p) geoPts.push([p.lat,p.lng]); }
+      if(it.type==='route'){
+        const r=S.routes.find(x=>x.id===it.id);
+        if(r&&r.coords){
+          // Sample route — max 20 points to keep it fast
+          const step=Math.max(1,Math.floor(r.coords.length/20));
+          for(let i=0;i<r.coords.length;i+=step) geoPts.push(r.coords[i]);
+        }
+      }
     });
-    if(!pts.length) return;
+    if(!geoPts.length) return;
 
-    // Filter points that are way off-screen (>400px outside viewport) — still include near-screen ones for smooth edges
-    const visPts = pts.filter(([x,y]) => x>-400 && x<W+400 && y>-400 && y<H+400);
-    if(!visPts.length) return;
+    const allPx = geoPts.map(latlngToPixel);
+    // Keep only points that are within a generous margin of the viewport
+    const margin = 500;
+    const visPx = allPx.filter(([x,y])=>x>-margin&&x<W+margin&&y>-margin&&y<H+margin);
+    if(!visPx.length) return;
 
     const color = DAY_ZONE_COLORS[di % DAY_ZONE_COLORS.length];
     const [r2,g2,b2] = [parseInt(color.slice(1,3),16), parseInt(color.slice(3,5),16), parseInt(color.slice(5,7),16)];
-    const rgba = (a) => `rgba(${r2},${g2},${b2},${a})`;
+    const rgba = a => `rgba(${r2},${g2},${b2},${a})`;
 
     let pathD;
-    if(visPts.length === 1){
-      const [cx,cy] = visPts[0];
-      pathD = `M${cx-50},${cy} a50,50 0 1,0 100,0 a50,50 0 1,0 -100,0`;
-    } else if(visPts.length === 2){
-      const [ax,ay]=visPts[0],[bx,by]=visPts[1];
-      const mx=(ax+bx)/2, my=(ay+by)/2;
-      let hull = [[ax,ay],[mx-15,my+15],[bx,by],[mx+15,my-15]];
-      hull = expandHull(hull, 55);
-      hull = wobble(hull, di+1);
-      pathD = smoothPath(hull);
+    if(visPx.length === 1){
+      const [cx,cy]=visPx[0];
+      pathD=`M${cx-55},${cy} a55,55 0 1,0 110,0 a55,55 0 1,0 -110,0`;
+    } else if(visPx.length === 2){
+      const [ax,ay]=visPx[0],[bx,by]=visPx[1];
+      const mx=(ax+bx)/2,my=(ay+by)/2;
+      let hull=[[ax,ay],[mx-20,my+20],[bx,by],[mx+20,my-20]];
+      hull=expandHull(hull,60);
+      hull=wobble(hull,di+1);
+      pathD=chaikinSmooth(hull,3);
     } else {
-      let hull = convexHull(visPts);
-      hull = expandHull(hull, 65);
-      hull = wobble(hull, di+1);
-      pathD = smoothPath(hull);
+      let hull=convexHull(visPx);
+      hull=expandHull(hull,68);
+      // Simplify: remove points closer than 30px to avoid degenerate splines
+      hull=simplifyHull(hull,30);
+      hull=wobble(hull,di+1);
+      pathD=chaikinSmooth(hull,3);
     }
     if(!pathD) return;
 
-    // SVG defs: blur filter
-    const fid = 'blur-d'+di;
-    const defs = document.createElementNS(ns,'defs');
-    const filter = document.createElementNS(ns,'filter');
+    // Shared blur filter (one per day)
+    const fid='blur-d'+di;
+    const defs=document.createElementNS(ns,'defs');
+    const filter=document.createElementNS(ns,'filter');
     filter.setAttribute('id',fid); filter.setAttribute('x','-40%'); filter.setAttribute('y','-40%');
     filter.setAttribute('width','180%'); filter.setAttribute('height','180%');
-    const feG = document.createElementNS(ns,'feGaussianBlur');
-    feG.setAttribute('stdDeviation','10');
+    const feG=document.createElementNS(ns,'feGaussianBlur'); feG.setAttribute('stdDeviation','12');
     filter.appendChild(feG); defs.appendChild(filter); svgEl.appendChild(defs);
 
-    // Fill (blurred, soft)
-    const fill = document.createElementNS(ns,'path');
-    fill.setAttribute('d', pathD);
-    fill.setAttribute('fill', rgba(0.13));
-    fill.setAttribute('filter', `url(#${fid})`);
+    // Soft blurred fill
+    const fill=document.createElementNS(ns,'path');
+    fill.setAttribute('d',pathD); fill.setAttribute('fill',rgba(0.14));
+    fill.setAttribute('filter',`url(#${fid})`);
     svgEl.appendChild(fill);
 
-    // Stroke (hand-drawn dashed)
-    const stroke = document.createElementNS(ns,'path');
-    stroke.setAttribute('d', pathD);
-    stroke.setAttribute('fill', rgba(0.06));
-    stroke.setAttribute('stroke', rgba(0.65));
-    stroke.setAttribute('stroke-width', '2.5');
-    stroke.setAttribute('stroke-dasharray', '10 5');
-    stroke.setAttribute('stroke-linecap', 'round');
-    stroke.setAttribute('stroke-linejoin', 'round');
+    // Dashed hand-drawn stroke (no blur on stroke — keeps it crisp)
+    const stroke=document.createElementNS(ns,'path');
+    stroke.setAttribute('d',pathD); stroke.setAttribute('fill',rgba(0.07));
+    stroke.setAttribute('stroke',rgba(0.7)); stroke.setAttribute('stroke-width','2.5');
+    stroke.setAttribute('stroke-dasharray','10 5');
+    stroke.setAttribute('stroke-linecap','round'); stroke.setAttribute('stroke-linejoin','round');
     svgEl.appendChild(stroke);
 
-    // Day title label
+    // Day title — anchored to centroid of visible points, just above the hull
     if(CFG.showZoneTitles){
-      const topY = Math.min(...visPts.map(p=>p[1])) - 22;
-      const centX = visPts.reduce((s,p)=>s+p[0],0)/visPts.length;
-      // Background rect for readability
-      const title = (d.title || ('Day '+(di+1))) + (d.date?' · '+d.date:'');
-      const lbl = document.createElementNS(ns,'text');
-      lbl.setAttribute('x', centX); lbl.setAttribute('y', topY);
+      const centX=visPx.reduce((s,p)=>s+p[0],0)/visPx.length;
+      const topY=Math.min(...visPx.map(p=>p[1]))-24;
+      const title=(d.title||('Day '+(di+1)))+(d.date?' · '+d.date:'');
+      const lbl=document.createElementNS(ns,'text');
+      lbl.setAttribute('x',centX); lbl.setAttribute('y',topY);
       lbl.setAttribute('text-anchor','middle');
-      lbl.setAttribute('font-size','12'); lbl.setAttribute('font-weight','800');
+      lbl.setAttribute('font-size','13'); lbl.setAttribute('font-weight','800');
       lbl.setAttribute('font-family','Nunito,sans-serif');
-      lbl.setAttribute('fill', rgba(0.9));
+      lbl.setAttribute('fill',rgba(0.92));
       lbl.setAttribute('paint-order','stroke');
-      lbl.setAttribute('stroke','rgba(255,255,255,0.85)');
-      lbl.setAttribute('stroke-width','3');
+      lbl.setAttribute('stroke','rgba(255,255,255,0.9)');
+      lbl.setAttribute('stroke-width','4');
       lbl.setAttribute('stroke-linejoin','round');
-      lbl.textContent = title;
+      lbl.textContent=title;
       svgEl.appendChild(lbl);
     }
   });
@@ -860,6 +911,7 @@ function tripData(){
   const fp=getFP();
   return{appVersion:APP_VERSION,savedAt:new Date().toISOString(),tripName:qs('#tname').value,
     fuelSettings:{consump:fp.c,price:fp.p},
+    settings:Object.assign({},CFG),
     eatingDefault:S.eatingDefault,
     eatingBudgets:Object.assign({},S.eatingBudgets),
     pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayIds:p.dayIds||[],cost:p.cost||0,costType:p.costType||'total'})),
@@ -872,6 +924,8 @@ async function loadData(json){
     const d=JSON.parse(json); clearAll(true);
     qs('#tname').value=d.tripName||d.name||'';
     if(d.fuelSettings){ if(d.fuelSettings.consump) qs('#f-consump').value=d.fuelSettings.consump; if(d.fuelSettings.price) qs('#f-price').value=d.fuelSettings.price; }
+    // Restore settings — don't overwrite fontScale if it differs, respect user's device preference
+    if(d.settings){ Object.assign(CFG, d.settings); saveCFG(); applySettings(); }
     S.eatingDefault = +(d.eatingDefault||0);
     if(d.eatingBudgets) Object.assign(S.eatingBudgets, d.eatingBudgets);
     (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
@@ -914,7 +968,7 @@ function updStats(){
       +'<div class="cbrk-total"><span>💰 Grand total</span><span>$'+tc.toFixed(2)+'</span></div>';
   }
   renderEatingBudgetRows();
-  refreshDayZones();
+  scheduleZoneRefresh();
 }
 function ra(){ renderPOIs(); renderDays(); renderRoutes(); renderNearby(); updStats(); fillRS('rf','rt','rd'); refMDay(); }
 
@@ -1018,4 +1072,4 @@ applyPin();
 applySettings();
 toast('RoadTrip Planner v'+APP_VERSION,'ok');
 window.addEventListener('load',()=>{ try{ gdInit(); }catch(e){} });
-window.addEventListener('resize',()=>{ if(window.innerWidth>=769&&!isDrawerOpen()&&!drawerPinned) openDrawer(); refreshDayZones(); });
+window.addEventListener('resize',()=>{ if(window.innerWidth>=769&&!isDrawerOpen()&&!drawerPinned) openDrawer(); scheduleZoneRefresh(); });
