@@ -30,6 +30,8 @@
 </head>
 <body>
 <div id="map"></div>
+<!-- Day zone SVG overlay -->
+<svg id="day-zone-svg" xmlns="http://www.w3.org/2000/svg"></svg>
 
 <!-- GPS live badge -->
 <div id="gbadge">
@@ -141,7 +143,16 @@
             <div><label class="lbl">Fuel price ($/L)</label><input class="inp" id="f-price" type="number" min="0" step=".01" value="1.70"></div>
           </div>
           <div style="font-size:.65rem;color:var(--muted);line-height:1.6;">Fuel cost applies to 🚗 Car routes only.</div>
-          <div class="finance-total" id="finance-total-rt">Total trip cost: <b>$0.00</b></div>
+          <div class="finance-total" id="finance-total-rt">⛽ Total fuel cost: <b>$0.00</b></div>
+        </div>
+      </details>
+      <!-- Restaurant budget -->
+      <details class="resto-box" id="resto-details">
+        <summary>Restaurant Budgets</summary>
+        <div class="resto-inner">
+          <div style="font-size:.64rem;color:var(--muted);margin-bottom:7px;line-height:1.6;">Set a daily restaurant/food budget per day. These are added to the grand total.</div>
+          <div id="resto-day-rows"></div>
+          <div class="resto-total" id="resto-total">Total restaurant budget: <b>$0.00</b></div>
         </div>
       </details>
       <div style="background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);padding:10px;margin-bottom:9px;">
@@ -214,7 +225,15 @@
         <div class="sc"><div class="sv" id="stkm">0</div><div class="sk">km total</div></div>
         <div class="sc" style="grid-column:span 2;"><div class="sv gold" id="stcost">$0.00</div><div class="sk">💰 Total trip cost</div></div>
       </div>
-      <div class="sec" style="margin-top:0;"><span>Google Drive</span><span class="sl"></span></div>
+      <!-- Detailed cost breakdown -->
+      <div class="cost-breakdown">
+        <h4>💰 Cost breakdown</h4>
+        <div id="cost-breakdown-body">
+          <div class="cbrk-row"><span class="cbrk-label">⛽ Fuel</span><span class="cbrk-val">$0.00</span></div>
+          <div class="cbrk-total"><span>💰 Grand total</span><span>$0.00</span></div>
+        </div>
+      </div>
+      <div class="sec"><span>Google Drive</span><span class="sl"></span></div>
       <div class="gdpanel">
         <h3>☁️ Google Drive</h3>
         <div id="gd-out">
@@ -278,9 +297,13 @@
       </select>
     </div>
   </div>
-  <div class="fr2">
-    <div><label class="lbl">Assign to Day</label><select class="inp" id="m-day"><option value="">— Not assigned —</option></select></div>
-    <div><label class="lbl">Cost ($)</label><input class="inp" id="m-cost" type="number" min="0" step=".01" placeholder="0.00"></div>
+  <div class="fld">
+    <label class="lbl">Assign to Days (multi-select)</label>
+    <div id="m-days-list"><div style="font-size:.65rem;color:var(--muted);">No days yet.</div></div>
+    <select id="m-day" style="display:none;"></select>
+  </div>
+  <div class="fld">
+    <label class="lbl">Cost ($)</label><input class="inp" id="m-cost" type="number" min="0" step=".01" placeholder="0.00">
   </div>
   <div class="fld"><label class="lbl">Color</label>
     <div class="crow">
