@@ -1,7 +1,7 @@
 /* =========================================================
-   RoadTrip Planner — app.js  v8.6.0
+   RoadTrip Planner — app.js  v8.7.0
    ========================================================= */
-const APP_VERSION = '8.6.0';
+const APP_VERSION = '8.7.0';
 const GOOGLE_CLIENT_ID = '940235006674-1mfg6a2qn7hkqu78irn2af34a507i76u.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'RoadTripPlanner';
 
@@ -14,7 +14,7 @@ const DAY_ZONE_COLORS = [
    SETTINGS / CONFIG  (persisted to localStorage)
 =================================================== */
 const CFG_DEFAULTS = {
-  showDayZones:      false,
+  showDayZones:      true,
   showZoneTitles:    true,
   showPoiLabels:     false,
   showHourDots:      true,
