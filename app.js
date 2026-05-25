@@ -100,8 +100,9 @@ const S = {
   eatingBudgets:{},   // dayId -> number (explicitly set)
   eatingDefault: 0,
   costType: 'total',
-  dayVisibility: {},  // dayId -> bool (true=visible, default true)
+  dayVisibility: {},  // dayId -> bool (false=hidden)
   dayOrderLines: [],  // Leaflet polyline objects for POI-order lines
+  poiVisibility: {},  // poiId -> bool (false=hidden)
 };
 
 const CATS={general:'📍',hotel:'🏨',restaurant:'🍽️',attraction:'🎯',hike:'🥾',view:'🌄',gas:'⛽',parking:'🅿️',info:'ℹ️'};
@@ -297,76 +298,85 @@ function renderEatingBudgetRows(){
 =================================================== */
 function latlngToPixel(ll){
   const pt = map.latLngToContainerPoint(L.latLng(ll[0], ll[1]));
-  // map container may be offset from viewport (e.g. when drawer is pinned)
   const rect = map.getContainer().getBoundingClientRect();
   return [pt.x + rect.left, pt.y + rect.top];
 }
+
 /* --- Ellipse zone geometry --- */
 
-// Fit the minimum bounding ellipse to a set of 2-D points.
-// We use PCA (principal component analysis) to find the orientation, then
-// measure extent along each axis. The resulting ellipse is guaranteed to
-// contain every input point.
+// Fit the minimum bounding ellipse to a set of 2-D points using PCA.
+// Works in any coordinate space (pixels or geo-degrees).
 function fitEllipse(pts){
   const n = pts.length;
-  // Centroid
   const cx = pts.reduce((s,p)=>s+p[0],0)/n;
   const cy = pts.reduce((s,p)=>s+p[1],0)/n;
-  // Covariance matrix
   let sxx=0,sxy=0,syy=0;
   for(const [x,y] of pts){
     const dx=x-cx, dy=y-cy;
     sxx+=dx*dx; sxy+=dx*dy; syy+=dy*dy;
   }
   sxx/=n; sxy/=n; syy/=n;
-  // Eigenvalues / eigenvectors of 2×2 symmetric matrix
   const trace=sxx+syy, det=sxx*syy-sxy*sxy;
   const disc=Math.sqrt(Math.max(0,trace*trace/4-det));
-  const l1=trace/2+disc, l2=trace/2-disc; // l1 >= l2
-  // Principal axis angle
-  let angle = 0;
-  if(Math.abs(sxy)>1e-9 || Math.abs(sxx-syy)>1e-9){
-    angle = Math.atan2(l1-sxx, sxy); // angle of major axis
-  }
-  // Project all points onto the two axes, measure max distance from centroid
+  const l1=trace/2+disc;
+  let angle=0;
+  if(Math.abs(sxy)>1e-12 || Math.abs(sxx-syy)>1e-12) angle=Math.atan2(l1-sxx,sxy);
   const cos=Math.cos(angle), sin=Math.sin(angle);
   let a=0, b=0;
   for(const [x,y] of pts){
     const dx=x-cx, dy=y-cy;
-    const u= dx*cos+dy*sin;   // along major axis
-    const v=-dx*sin+dy*cos;   // along minor axis
+    const u= dx*cos+dy*sin;
+    const v=-dx*sin+dy*cos;
     a=Math.max(a,Math.abs(u));
     b=Math.max(b,Math.abs(v));
   }
   return {cx,cy,a,b,angle};
 }
 
-// Generate N points around an ellipse (cx,cy,a,b,angle) as [x,y] array
-function ellipsePoints(cx,cy,a,b,angle,N=64){
+// Geo-space padding: add PAD_METRES to the semi-axes measured in geographic degrees.
+// By working in degrees, the ellipse has a fixed real-world size regardless of zoom.
+// We approximate 1 metre ≈ 1/111320 degrees latitude, and adjust longitude by cos(lat).
+const ELLIPSE_PAD_METRES = 3500; // ~3.5 km padding around the outermost POI
+const ELLIPSE_EXTRA_METRES = 1500; // extra per retry
+
+function geoPad(latDeg){
+  const latPad = ELLIPSE_PAD_METRES / 111320;
+  // longitude degrees shrink towards the poles
+  const lngPad = ELLIPSE_PAD_METRES / (111320 * Math.cos(latDeg * Math.PI / 180));
+  return {latPad, lngPad};
+}
+
+// Sample N evenly-spaced angles around an ellipse in GEO-SPACE, then project to pixels.
+// cx/cy in geo-degrees, aLat/bLat are semi-axes in geo-degrees,
+// aLng/bLng are semi-axes in geo-degrees for x (longitude) direction.
+// angle is the PCA rotation angle (in pixel space — close enough for small areas).
+function geoEllipseAsPixels(cx_lat, cx_lng, aLat, aLng, bLat, bLng, angle, N=60){
   const pts=[];
   const cos=Math.cos(angle), sin=Math.sin(angle);
   for(let i=0;i<N;i++){
     const t=2*Math.PI*i/N;
-    const u=a*Math.cos(t), v=b*Math.sin(t);
-    pts.push([cx+u*cos-v*sin, cy+u*sin+v*cos]);
+    // unrotated ellipse in normalised (u,v) space
+    const u=aLat*Math.cos(t), v=bLat*Math.sin(t);
+    // rotate — use latitude-equivalent units for both axes
+    const dlat = u*cos - v*sin;
+    const dlng = (u*sin + v*cos) * (aLng/aLat); // scale lng to correct for aspect
+    pts.push(latlngToPixel([cx_lat+dlat, cx_lng+dlng]));
   }
   return pts;
 }
 
-// Add a subtle per-vertex wobble for the hand-drawn feel
-// (smaller amplitude than before — ellipse is already smooth)
+// Wobble: small random pixel nudge for hand-drawn look
 function wobbleEllipse(pts, seed){
   let r=seed*9301+49297;
   return pts.map(([x,y])=>{
-    r=(r*9301+49297)%233280; const rx=(r/233280-.5)*8;
-    r=(r*9301+49297)%233280; const ry=(r/233280-.5)*8;
+    r=(r*9301+49297)%233280; const rx=(r/233280-.5)*6;
+    r=(r*9301+49297)%233280; const ry=(r/233280-.5)*6;
     return [x+rx, y+ry];
   });
 }
 
-// Convert a wobbled point array to a smooth SVG path via Chaikin (1 pass — gentle)
+// Convert point array → smooth SVG path (1 Chaikin pass)
 function ellipseToPath(pts){
-  // 1 pass of Chaikin to soften the wobble without shrinking much
   const n=pts.length, s=[];
   for(let i=0;i<n;i++){
     const a=pts[i], b=pts[(i+1)%n];
@@ -376,7 +386,7 @@ function ellipseToPath(pts){
   return 'M'+s[0][0]+','+s[0][1]+s.slice(1).map(([x,y])=>' L'+x+','+y).join('')+' Z';
 }
 
-// Check whether a point is inside a polygon (ray-casting)
+// Ray-casting point-in-polygon
 function pointInPolygon([px,py], poly){
   let inside=false;
   for(let i=0,j=poly.length-1;i<poly.length;j=i++){
@@ -386,39 +396,48 @@ function pointInPolygon([px,py], poly){
   return inside;
 }
 
-// Build the day-zone ellipse path ensuring all POI pixels are contained.
-// Returns an SVG path string.
-const ELLIPSE_PAD = 55;   // base padding in pixels around the fitted ellipse
-const ELLIPSE_EXTRA = 30; // extra per retry if a POI slips outside
+// Build day-zone path in geo-space so size is zoom-invariant.
+// geoPts: [[lat,lng],...] all points (POIs + route samples)
+// poiGeoPts: [[lat,lng],...] POIs only (must be inside)
+// seed: per-day integer for deterministic wobble
+function buildDayPath(geoPts, poiGeoPts, seed){
+  if(!geoPts.length) return '';
 
-function buildDayPath(visPx, poiPx, seed){
-  if(visPx.length === 0) return '';
-
-  if(visPx.length === 1){
-    // Single point: circle
-    const [cx,cy]=visPx[0];
-    const r=ELLIPSE_PAD+20;
-    return `M${cx-r},${cy} a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 -${r*2},0`;
+  if(geoPts.length===1){
+    // Single point: circle with fixed geo radius
+    const [lat,lng]=geoPts[0];
+    const pad=geoPad(lat);
+    const r=ELLIPSE_PAD_METRES/111320+pad.latPad*0.5;
+    const pts=[];
+    for(let i=0;i<48;i++){const t=2*Math.PI*i/48; pts.push(latlngToPixel([lat+r*Math.cos(t),lng+(r/Math.cos(lat*Math.PI/180))*Math.sin(t)]));}
+    return ellipseToPath(wobbleEllipse(pts,seed));
   }
 
-  // Fit ellipse to all visible points
-  const {cx,cy,a: rawA, b: rawB, angle} = fitEllipse(visPx);
+  // Fit ellipse in lat/lng space
+  const {cx:cxLat, cy:cxLng, a:rawALat, b:rawBLat, angle} = fitEllipse(geoPts);
+  // Scale longitude semi-axis: degrees-lat and degrees-lng have different metre values
+  const cosLat = Math.cos(cxLat*Math.PI/180)||1;
+  const rawALng = rawALat;  // PCA angle was found in lat/lng space
+  const rawBLng = rawBLat;
 
   for(let attempt=0; attempt<4; attempt++){
-    const pad = ELLIPSE_PAD + attempt*ELLIPSE_EXTRA;
-    const a = Math.max(rawA + pad, pad); // semi-major
-    const b = Math.max(rawB + pad, pad); // semi-minor
+    const extraMetres = attempt*ELLIPSE_EXTRA_METRES;
+    const padLat = (ELLIPSE_PAD_METRES+extraMetres)/111320;
+    const padLng = (ELLIPSE_PAD_METRES+extraMetres)/(111320*cosLat);
+    const aLat = Math.max(rawALat+padLat, padLat);
+    const bLat = Math.max(rawBLat+padLat, padLat);
+    const aLng = aLat/cosLat;  // keep aspect ratio correct
+    const bLng = bLat/cosLat;
 
-    // Generate perimeter, wobble, smooth
-    const perim = ellipsePoints(cx,cy,a,b,angle,60);
+    const perim  = geoEllipseAsPixels(cxLat,cxLng,aLat,aLng,bLat,bLng,angle,60);
     const wobbled = wobbleEllipse(perim, seed);
-    const pathD = ellipseToPath(wobbled);
+    const pathD  = ellipseToPath(wobbled);
 
     // Verify all POI pixels are inside
     const poly = pathD.replace(/[MLZ]/g,' ').trim().split(/\s+/).reduce((acc,_,i,arr)=>{
-      if(i%2===0){ const x=parseFloat(arr[i]),y=parseFloat(arr[i+1]); if(!isNaN(x)&&!isNaN(y)) acc.push([x,y]); } return acc;
+      if(i%2===0){const x=parseFloat(arr[i]),y=parseFloat(arr[i+1]);if(!isNaN(x)&&!isNaN(y))acc.push([x,y]);}return acc;
     },[]);
-    const allIn = poiPx.every(pt=>pointInPolygon(pt,poly));
+    const allIn = poiGeoPts.map(latlngToPixel).every(pt=>pointInPolygon(pt,poly));
     if(allIn || attempt===3) return pathD;
   }
   return '';
@@ -426,7 +445,6 @@ function buildDayPath(visPx, poiPx, seed){
 
 /* --- Debounced rAF-based zone refresh --- */
 let _dzRafId = null;
-let _dzPending = false;
 
 // Hide SVG during any map motion (pan or zoom) for zero-lag, redraw after
 map.on('movestart', ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
@@ -454,41 +472,35 @@ function refreshDayZones(){
   svgEl.innerHTML = '';
 
   S.days.forEach((d, di) => {
-    // Collect all geo points. Keep POI pixels separate — those MUST be inside the zone.
+    if(isDayHidden(d.id)) return;
+
+    // Collect geo points — keep POI geo pts separate for containment check
     const poiGeoPts = [];
     const routeGeoPts = [];
-
     d.items.forEach(it => {
-      if(it.type==='poi'){
-        const p=S.pois.find(x=>x.id===it.id);
-        if(p) poiGeoPts.push([p.lat,p.lng]);
-      }
-      if(it.type==='route'){
-        const r=S.routes.find(x=>x.id===it.id);
-        if(r&&r.coords){
-          // Sample route — 20 points max for performance
-          const step=Math.max(1,Math.floor(r.coords.length/20));
-          for(let i=0;i<r.coords.length;i+=step) routeGeoPts.push(r.coords[i]);
-        }
-      }
+      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p) poiGeoPts.push([p.lat,p.lng]); }
+      if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r&&r.coords){
+        const step=Math.max(1,Math.floor(r.coords.length/20));
+        for(let i=0;i<r.coords.length;i+=step) routeGeoPts.push(r.coords[i]);
+      }}
     });
-
-    const allGeoPts = [...poiGeoPts, ...routeGeoPts];
+    const allGeoPts=[...poiGeoPts,...routeGeoPts];
     if(!allGeoPts.length) return;
 
-    // Convert to viewport pixels
-    const margin = 600;
-    const allPx = allGeoPts.map(latlngToPixel);
-    const poiPx = poiGeoPts.map(latlngToPixel);   // used for containment check
-    const visPx = allPx.filter(([x,y])=>x>-margin&&x<W+margin&&y>-margin&&y<H+margin);
-    if(!visPx.length) return;
+    // Quick viewport cull: skip days entirely off-screen
+    const margin=600;
+    const anyVisible=allGeoPts.some(geo=>{
+      const [x,y]=latlngToPixel(geo);
+      return x>-margin&&x<W+margin&&y>-margin&&y<H+margin;
+    });
+    if(!anyVisible) return;
 
-    const color = DAY_ZONE_COLORS[di % DAY_ZONE_COLORS.length];
-    const [r2,g2,b2] = [parseInt(color.slice(1,3),16), parseInt(color.slice(3,5),16), parseInt(color.slice(5,7),16)];
-    const rgba = a => `rgba(${r2},${g2},${b2},${a})`;
+    const color=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+    const [r2,g2,b2]=[parseInt(color.slice(1,3),16),parseInt(color.slice(3,5),16),parseInt(color.slice(5,7),16)];
+    const rgba=a=>`rgba(${r2},${g2},${b2},${a})`;
 
-    // Build path with guaranteed containment of all POI pixels
-    const pathD = buildDayPath(visPx, poiPx, di+1);
+    // Build geo-invariant ellipse path
+    const pathD=buildDayPath(allGeoPts, poiGeoPts, di+1);
     if(!pathD) return;
 
     // Blur filter
@@ -497,16 +509,16 @@ function refreshDayZones(){
     const filter=document.createElementNS(ns,'filter');
     filter.setAttribute('id',fid); filter.setAttribute('x','-40%'); filter.setAttribute('y','-40%');
     filter.setAttribute('width','180%'); filter.setAttribute('height','180%');
-    const feG=document.createElementNS(ns,'feGaussianBlur'); feG.setAttribute('stdDeviation','12');
+    const feG=document.createElementNS(ns,'feGaussianBlur'); feG.setAttribute('stdDeviation','10');
     filter.appendChild(feG); defs.appendChild(filter); svgEl.appendChild(defs);
 
-    // Soft blurred fill
+    // Soft fill
     const fill=document.createElementNS(ns,'path');
     fill.setAttribute('d',pathD); fill.setAttribute('fill',rgba(0.14));
     fill.setAttribute('filter',`url(#${fid})`);
     svgEl.appendChild(fill);
 
-    // Dashed hand-drawn stroke
+    // Dashed stroke
     const stroke=document.createElementNS(ns,'path');
     stroke.setAttribute('d',pathD); stroke.setAttribute('fill',rgba(0.07));
     stroke.setAttribute('stroke',rgba(0.7)); stroke.setAttribute('stroke-width','2.5');
@@ -514,14 +526,15 @@ function refreshDayZones(){
     stroke.setAttribute('stroke-linecap','round'); stroke.setAttribute('stroke-linejoin','round');
     svgEl.appendChild(stroke);
 
-    // Day title label above the zone
+    // Day title — at the CENTROID of all geo points, projected to pixels
     if(CFG.showZoneTitles){
-      const centX=visPx.reduce((s,p)=>s+p[0],0)/visPx.length;
-      const topY=Math.min(...visPx.map(p=>p[1]))-28;
+      const centLat=allGeoPts.reduce((s,p)=>s+p[0],0)/allGeoPts.length;
+      const centLng=allGeoPts.reduce((s,p)=>s+p[1],0)/allGeoPts.length;
+      const [centX,centY]=latlngToPixel([centLat,centLng]);
       const title=(d.title||('Day '+(di+1)))+(d.date?' · '+d.date:'');
       const lbl=document.createElementNS(ns,'text');
-      lbl.setAttribute('x',centX); lbl.setAttribute('y',topY);
-      lbl.setAttribute('text-anchor','middle');
+      lbl.setAttribute('x',centX); lbl.setAttribute('y',centY);
+      lbl.setAttribute('text-anchor','middle'); lbl.setAttribute('dominant-baseline','middle');
       lbl.setAttribute('font-size','13'); lbl.setAttribute('font-weight','800');
       lbl.setAttribute('font-family','Nunito,sans-serif');
       lbl.setAttribute('fill',rgba(0.92));
@@ -605,6 +618,24 @@ function setDayVisibility(did,visible){
 }
 function setAllDaysVisibility(visible){
   S.days.forEach(d=>setDayVisibility(d.id,visible));
+}
+
+/* ===================================================
+   POI VISIBILITY
+=================================================== */
+function isPOIHidden(pid){ return S.poiVisibility[pid]===false; }
+function setPOIVisibility(pid, visible){
+  if(visible) delete S.poiVisibility[pid];
+  else S.poiVisibility[pid]=false;
+  const p=S.pois.find(x=>x.id===pid);
+  if(p&&p.marker){ try{ visible?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){} }
+  renderPOIs(); // re-render list so eye icon updates
+  renderDayOrderLines();
+  scheduleZoneRefresh();
+}
+function setAllPOIsVisibility(visible){
+  S.pois.forEach(p=>{ if(visible) delete S.poiVisibility[p.id]; else S.poiVisibility[p.id]=false; try{ visible?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){} });
+  renderPOIs(); renderDayOrderLines(); scheduleZoneRefresh();
 }
 function interpolateCoords(coords, fraction){
   const totalLen = coords.reduce((acc,_,i)=>{ if(!i) return acc; return acc+L.latLng(coords[i-1]).distanceTo(L.latLng(coords[i])); },0);
@@ -712,22 +743,25 @@ function renderPOIs(){
     .filter(p=>S.fcat==='all'||p.cat===S.fcat)
     .slice()
     .sort((a,b)=>a.name.localeCompare(b.name,'fr',{sensitivity:'base'}));
+
+  // Determine map marker visibility for every POI:
+  // Hidden if: (a) individually hidden, OR (b) ALL assigned days are hidden (not "any")
   S.pois.forEach(p=>{
-    try{
-      const shouldShow=(S.fcat==='all'||p.cat===S.fcat)
-        && !(p.dayIds||[]).length
-          ? true
-          : (S.fcat==='all'||p.cat===S.fcat) && (p.dayIds||[]).every(did=>!isDayHidden(did))
-            || (S.fcat==='all'||p.cat===S.fcat) && !(p.dayIds||[]).some(did=>isDayHidden(did));
-      ((S.fcat==='all'||p.cat===S.fcat)&&!(p.dayIds||[]).some(did=>isDayHidden(did)))?map.addLayer(p.marker):map.removeLayer(p.marker);
-    }catch(e){}
+    const catMatch=(S.fcat==='all'||p.cat===S.fcat);
+    const poiHidden=isPOIHidden(p.id);
+    const dayHidden=(p.dayIds||[]).length>0 && (p.dayIds||[]).every(did=>isDayHidden(did));
+    const show=catMatch && !poiHidden && !dayHidden;
+    try{ show?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){}
   });
+
   if(!vis.length){ el.innerHTML='<div style="font-size:.73rem;color:var(--muted);">No POIs'+(S.fcat!=='all'?' in this category':'')+'.</div>'; return; }
+
   el.innerHTML=vis.map(p=>{
+    const hidden=isPOIHidden(p.id);
     const dayBadges=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); if(!d) return''; const di=S.days.indexOf(d); const c=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length]; return'<span class="pday-badge" style="background:'+c+';">'+esc(d.title)+'</span>'; }).join('');
     const eff=poiEffectiveCost(p);
     const costStr = p.costType==='perday' && (p.dayIds||[]).length>1 ? '$'+p.cost+'/day':'';
-    return '<div class="poic" data-pid="'+p.id+'" onclick="focusPOI('+p.id+')">'
+    return '<div class="poic" data-pid="'+p.id+'" onclick="focusPOI('+p.id+')" style="'+(hidden?'opacity:.45;':'')+'}">'
       +'<div class="ppin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
       +'<div class="pbody"><div class="pname">'+esc(p.name)+(p.locked?' 🔒':'')+'</div>'
       +'<div class="pmeta">'+(p.rating?'<span>'+'★'.repeat(+p.rating)+'</span>':'')+'</div>'
@@ -735,7 +769,9 @@ function renderPOIs(){
       +(dayBadges?'<div class="pday-badges">'+dayBadges+'</div>':'')
       +(p.tags&&p.tags.length?'<div class="ptags">'+p.tags.slice(0,3).map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+'</div>':'')
       +'<div class="poi-photos" data-phid="'+p.id+'"></div></div>'
-      +'<div class="pacts"><button class="btn bg bic" onclick="event.stopPropagation();editPOI('+p.id+')">✏️</button>'
+      +'<div class="pacts">'
+      +'<button class="btn bg bic" onclick="event.stopPropagation();setPOIVisibility('+p.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show':'Hide')+'" style="font-size:.8rem;">'+(hidden?'👁‍🗨':'👁')+'</button>'
+      +'<button class="btn bg bic" onclick="event.stopPropagation();editPOI('+p.id+')">✏️</button>'
       +'<button class="btn br bic" onclick="event.stopPropagation();delPOI('+p.id+')">🗑</button></div></div>';
   }).join('');
   qsa('.poic[data-pid]',el).forEach(card=>{
@@ -1048,6 +1084,7 @@ function tripData(){
     eatingDefault:S.eatingDefault,
     eatingBudgets:Object.assign({},S.eatingBudgets),
     dayVisibility:Object.assign({},S.dayVisibility),
+    poiVisibility:Object.assign({},S.poiVisibility),
     pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayIds:p.dayIds||[],cost:p.cost||0,costType:p.costType||'total'})),
     routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4'})),
     days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
@@ -1063,6 +1100,7 @@ async function loadData(json){
     S.eatingDefault = +(d.eatingDefault||0);
     if(d.eatingBudgets) Object.assign(S.eatingBudgets, d.eatingBudgets);
     if(d.dayVisibility) Object.assign(S.dayVisibility, d.dayVisibility);
+    if(d.poiVisibility) Object.assign(S.poiVisibility, d.poiVisibility);
     (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
     (d.pois||[]).forEach(p=>{ const dayIds=p.dayIds||(p.dayId?[Number(p.dayId)]:[]); addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayIds:dayIds.map(Number),cost:+(p.cost||0),costType:p.costType||'total'}); });
     fillRS('rf','rt','rd');
@@ -1083,7 +1121,7 @@ function clearAll(s){
   clearLines(); poiLabelLayer.clearLayers();
   S.dayOrderLines.forEach(l=>map.removeLayer(l)); S.dayOrderLines=[];
   S.pois.length=0; S.routes.length=0; S.days.length=0;
-  S.eatingBudgets={}; S.eatingDefault=0; S.dayVisibility={};
+  S.eatingBudgets={}; S.eatingDefault=0; S.dayVisibility={}; S.poiVisibility={};
   svgEl.innerHTML=''; ra(); if(!s) toast('Cleared','ok');
 }
 function expGPX(){ const w=S.pois.map(p=>'  <wpt lat="'+p.lat+'" lon="'+p.lng+'"><name>'+esc(p.name)+'</name></wpt>').join('\n'); const t=S.routes.map(r=>'  <trk><name>'+esc(r.fromName)+'→'+esc(r.toName)+'</name><trkseg>'+r.coords.map(c=>'<trkpt lat="'+c[0]+'" lon="'+c[1]+'"></trkpt>').join('')+'</trkseg></trk>').join('\n'); const b=new Blob(['<?xml version="1.0"?>\n<gpx version="1.1">\n'+w+'\n'+t+'\n</gpx>'],{type:'application/gpx+xml'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='roadtrip.gpx'; a.click(); toast('GPX exported','ok'); }
