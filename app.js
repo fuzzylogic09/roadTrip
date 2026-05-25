@@ -1,7 +1,7 @@
 /* =========================================================
-   RoadTrip Planner — app.js  v8.5.0
+   RoadTrip Planner — app.js  v8.6.0
    ========================================================= */
-const APP_VERSION = '8.5.0';
+const APP_VERSION = '8.6.0';
 const GOOGLE_CLIENT_ID = '940235006674-1mfg6a2qn7hkqu78irn2af34a507i76u.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'RoadTripPlanner';
 
@@ -508,15 +508,35 @@ function refreshDayZones(){
   S.days.forEach((d, di) => {
     if(isDayHidden(d.id)) return;
 
-    // Collect geo points — keep POI geo pts separate for containment check
+    // Collect geo points.
+    // poiGeoPts = ALL POIs that belong to this day (direct items + route endpoints)
+    //             These drive the ellipse fit and MUST be inside.
+    // routeGeoPts = sampled route coordinates (used to expand ellipse if needed, not for fitting)
+    const poiIdsSeen = new Set();
     const poiGeoPts = [];
     const routeGeoPts = [];
     d.items.forEach(it => {
-      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p) poiGeoPts.push([p.lat,p.lng]); }
-      if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r&&r.coords){
-        const step=Math.max(1,Math.floor(r.coords.length/20));
-        for(let i=0;i<r.coords.length;i+=step) routeGeoPts.push(r.coords[i]);
-      }}
+      if(it.type==='poi'){
+        const p=S.pois.find(x=>x.id===it.id);
+        if(p && !poiIdsSeen.has(p.id)){ poiIdsSeen.add(p.id); poiGeoPts.push([p.lat,p.lng]); }
+      }
+      if(it.type==='route'){
+        const r=S.routes.find(x=>x.id===it.id);
+        if(r){
+          // Add route endpoint POIs to poiGeoPts (they are real stops, must be inside)
+          [r.fromId,r.toId].forEach(pid=>{
+            if(!poiIdsSeen.has(pid)){
+              const ep=S.pois.find(x=>x.id===pid);
+              if(ep){ poiIdsSeen.add(pid); poiGeoPts.push([ep.lat,ep.lng]); }
+            }
+          });
+          // Sample route path for context (not used for fitting, only for containment expansion)
+          if(r.coords){
+            const step=Math.max(1,Math.floor(r.coords.length/20));
+            for(let i=0;i<r.coords.length;i+=step) routeGeoPts.push(r.coords[i]);
+          }
+        }
+      }
     });
     const allGeoPts=[...poiGeoPts,...routeGeoPts];
     if(!allGeoPts.length) return;
@@ -669,15 +689,40 @@ function poiEffectivelyVisible(p){
 }
 
 function applyAllMarkerVisibility(){
+  // Build a map of poiId -> set of dayIds that "own" it (direct assignment OR route endpoint)
+  // A POI is considered owned by a day if:
+  //   a) it's in p.dayIds, OR
+  //   b) it's the fromId or toId of a route whose dayId is that day
+  const poiDayOwnership = new Map(); // poiId -> Set<dayId>
   S.pois.forEach(p=>{
-    const show=(S.fcat==='all'||p.cat===S.fcat) && poiEffectivelyVisible(p);
+    const s=new Set(p.dayIds||[]);
+    poiDayOwnership.set(p.id, s);
+  });
+  S.routes.forEach(r=>{
+    if(!r.dayId) return;
+    [r.fromId, r.toId].forEach(pid=>{
+      if(!poiDayOwnership.has(pid)) poiDayOwnership.set(pid, new Set());
+      poiDayOwnership.get(pid).add(r.dayId);
+    });
+  });
+
+  S.pois.forEach(p=>{
+    // Effective visibility using union of direct dayIds + route-endpoint dayIds
+    const allOwnerDays=[...poiDayOwnership.get(p.id)||[]];
+    const effectivelyVisible=()=>{
+      if(S.poiVisibility[p.id]===false) return false;
+      if(S.poiVisibility[p.id]===true)  return true;
+      if(allOwnerDays.length) return allOwnerDays.some(did=>!isDayHidden(did));
+      return !S.allPOIsHidden;
+    };
+    const show=(S.fcat==='all'||p.cat===S.fcat) && effectivelyVisible();
     try{ show?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){}
   });
+
   S.routes.forEach(r=>{
     if(!r.poly) return;
     const hidden=r.dayId && isDayHidden(r.dayId);
     try{ hidden?map.removeLayer(r.poly):map.addLayer(r.poly); }catch(e){}
-    // Also hide hour dots when route is hidden
     if(r.hourDotMarkers) r.hourDotMarkers.forEach(m=>{
       try{ hidden?map.removeLayer(m):map.addLayer(m); }catch(e){}
     });
@@ -791,6 +836,20 @@ function setPOIDays(p,newDayIds){
   p.dayIds=newDayIds;
   if(p.marker) p.marker.closePopup();
 }
+/** Called from map popup checkbox — toggles one day assignment without closing popup */
+function quickTogglePOIDay(poiId, dayId, add){
+  const p=S.pois.find(x=>x.id===poiId); if(!p) return;
+  const days=p.dayIds||[];
+  const newDays=add ? [...new Set([...days,dayId])] : days.filter(x=>x!==dayId);
+  setPOIDays(p,newDays);
+  p.dayIds=newDays;
+  // Refresh the popup content live (the popup stays open)
+  if(p.marker&&p.marker.getPopup()&&p.marker.getPopup().isOpen()){
+    p.marker.setPopupContent(popH(p));
+  }
+  ra();
+  toast((add?'📅 Added to ':'📅 Removed from ')+(S.days.find(x=>x.id===dayId)||{title:'?'}).title,'ok');
+}
 function popH(p){
   const stars=p.rating?'★'.repeat(+p.rating)+'☆'.repeat(5-+p.rating):'';
   const links=(p.links||[]).filter(l=>l.url).map(l=>'<a class="lchip" href="'+l.url+'" target="_blank">🔗 '+(l.label||l.url.slice(0,20))+'</a>').join(' ');
@@ -800,12 +859,28 @@ function popH(p){
   const costStr = p.costType==='perday' && (p.dayIds||[]).length>1
     ? '$'+p.cost.toFixed(2)+'/day × '+(p.dayIds||[]).length+' = $'+eff.toFixed(2)
     : '$'+eff.toFixed(2);
+  // Quick day-assign: checkboxes for each day
+  const dayCheckboxes=S.days.length?
+    '<div style="margin-top:5px;">'
+    +'<div style="font-size:.6rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:3px;">📅 Assign to days</div>'
+    +'<div style="display:flex;flex-direction:column;gap:3px;max-height:90px;overflow-y:auto;">'
+    +S.days.map((d,di)=>{
+      const checked=(p.dayIds||[]).includes(d.id);
+      const c=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+      return'<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.68rem;">'
+        +'<input type="checkbox" '+(checked?'checked':'')+' style="accent-color:'+c+';cursor:pointer;" onchange="quickTogglePOIDay('+p.id+','+d.id+',this.checked)">'
+        +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0;"></span>'
+        +esc(d.title)+(d.date?' <span style="color:var(--muted2);">'+d.date+'</span>':'')
+        +'</label>';
+    }).join('')
+    +'</div></div>'
+    :'';
   return '<div class="pt">'+(CATS[p.cat]||'📍')+' '+esc(p.name)+'</div>'
     +(stars?'<div class="pr">'+stars+'</div>':'')
     +(eff?'<div class="pr">💰 <b style="color:var(--gold);">'+costStr+'</b></div>':'')
     +(p.desc?'<div class="pd">'+esc(p.desc)+'</div>':'')
-    +(dayNames.length?'<div class="pr">📅 <b>'+dayNames.join(', ')+'</b></div>':'')
-    +(links?'<div class="pr">'+links+'</div>':'')
+    +dayCheckboxes
+    +(links?'<div class="pr" style="margin-top:4px;">'+links+'</div>':'')
     +(tags?'<div class="pr">'+tags+'</div>':'')
     +'<div class="pop-photos"></div>'
     +'<div class="pr" style="font-size:.61rem;color:var(--muted);margin-top:2px;">'+p.lat.toFixed(5)+', '+p.lng.toFixed(5)+' · '+(p.locked?'🔒':'🔓')+'</div>'
