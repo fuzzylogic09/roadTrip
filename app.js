@@ -1,7 +1,7 @@
 /* =========================================================
-   RoadTrip Planner — app.js  v8.4.0
+   RoadTrip Planner — app.js  v8.5.0
    ========================================================= */
-const APP_VERSION = '8.4.0';
+const APP_VERSION = '8.5.0';
 const GOOGLE_CLIENT_ID = '940235006674-1mfg6a2qn7hkqu78irn2af34a507i76u.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'RoadTripPlanner';
 
@@ -305,68 +305,72 @@ function latlngToPixel(ll){
 
 /* --- Ellipse zone geometry --- */
 
-// Fit the minimum bounding ellipse to a set of 2-D points using PCA.
-// Works in any coordinate space (pixels or geo-degrees).
-function fitEllipse(pts){
-  const n = pts.length;
-  const cx = pts.reduce((s,p)=>s+p[0],0)/n;
-  const cy = pts.reduce((s,p)=>s+p[1],0)/n;
+// Convert [lat,lng] to approximate metres from origin (for PCA normalization)
+// Uses equirectangular projection centered on the centroid
+function latlngToMetres(pts){
+  const cLat=pts.reduce((s,p)=>s+p[0],0)/pts.length;
+  const cLng=pts.reduce((s,p)=>s+p[1],0)/pts.length;
+  const cosLat=Math.cos(cLat*Math.PI/180)||1;
+  return pts.map(([lat,lng])=>[
+    (lng-cLng)*111320*cosLat,  // x in metres
+    (lat-cLat)*111320          // y in metres
+  ]);
+}
+
+// Fit minimum bounding ellipse using PCA in metre-space.
+// Returns {cx_lat, cx_lng, aMet, bMet, angleMet}
+// where aMet/bMet are semi-axes in metres, angleMet is the rotation angle in metre-space.
+function fitEllipseGeo(pts){
+  const n=pts.length;
+  const cLat=pts.reduce((s,p)=>s+p[0],0)/n;
+  const cLng=pts.reduce((s,p)=>s+p[1],0)/n;
+  const cosLat=Math.cos(cLat*Math.PI/180)||1;
+
+  // Convert to metres centred at centroid
+  const mpts=pts.map(([lat,lng])=>[
+    (lng-cLng)*111320*cosLat,
+    (lat-cLat)*111320
+  ]);
   let sxx=0,sxy=0,syy=0;
-  for(const [x,y] of pts){
-    const dx=x-cx, dy=y-cy;
-    sxx+=dx*dx; sxy+=dx*dy; syy+=dy*dy;
-  }
+  for(const [x,y] of mpts){ sxx+=x*x; sxy+=x*y; syy+=y*y; }
   sxx/=n; sxy/=n; syy/=n;
-  const trace=sxx+syy, det=sxx*syy-sxy*sxy;
-  const disc=Math.sqrt(Math.max(0,trace*trace/4-det));
+  const trace=sxx+syy, disc=Math.sqrt(Math.max(0,(sxx-syy)**2/4+sxy**2));
   const l1=trace/2+disc;
-  let angle=0;
-  if(Math.abs(sxy)>1e-12 || Math.abs(sxx-syy)>1e-12) angle=Math.atan2(l1-sxx,sxy);
-  const cos=Math.cos(angle), sin=Math.sin(angle);
-  let a=0, b=0;
-  for(const [x,y] of pts){
-    const dx=x-cx, dy=y-cy;
-    const u= dx*cos+dy*sin;
-    const v=-dx*sin+dy*cos;
-    a=Math.max(a,Math.abs(u));
-    b=Math.max(b,Math.abs(v));
+  // Angle of major axis in metre-space
+  let angleMet=0;
+  if(Math.abs(sxy)>1e-6||Math.abs(sxx-syy)>1e-6) angleMet=Math.atan2(2*sxy, sxx-syy)/2;
+  const cos=Math.cos(angleMet), sin=Math.sin(angleMet);
+  let aMet=0, bMet=0;
+  for(const [x,y] of mpts){
+    const u= x*cos+y*sin;
+    const v=-x*sin+y*cos;
+    aMet=Math.max(aMet,Math.abs(u));
+    bMet=Math.max(bMet,Math.abs(v));
   }
-  return {cx,cy,a,b,angle};
+  return {cLat,cLng,aMet,bMet,angleMet,cosLat};
 }
 
-// Geo-space padding: add PAD_METRES to the semi-axes measured in geographic degrees.
-// By working in degrees, the ellipse has a fixed real-world size regardless of zoom.
-// We approximate 1 metre ≈ 1/111320 degrees latitude, and adjust longitude by cos(lat).
-const ELLIPSE_PAD_METRES = 3500; // ~3.5 km padding around the outermost POI
-const ELLIPSE_EXTRA_METRES = 1500; // extra per retry
-
-function geoPad(latDeg){
-  const latPad = ELLIPSE_PAD_METRES / 111320;
-  // longitude degrees shrink towards the poles
-  const lngPad = ELLIPSE_PAD_METRES / (111320 * Math.cos(latDeg * Math.PI / 180));
-  return {latPad, lngPad};
-}
-
-// Sample N evenly-spaced angles around an ellipse in GEO-SPACE, then project to pixels.
-// cx/cy in geo-degrees, aLat/bLat are semi-axes in geo-degrees,
-// aLng/bLng are semi-axes in geo-degrees for x (longitude) direction.
-// angle is the PCA rotation angle (in pixel space — close enough for small areas).
-function geoEllipseAsPixels(cx_lat, cx_lng, aLat, aLng, bLat, bLng, angle, N=60){
+// Sample N points around a geo ellipse described in metre-space, projected to pixels.
+// angleMet is measured in the (x=lng*cosLat*111320, y=lat*111320) plane.
+function geoEllipseAsPixels(cLat, cLng, aMet, bMet, angleMet, cosLat, N=64){
+  const cos=Math.cos(angleMet), sin=Math.sin(angleMet);
   const pts=[];
-  const cos=Math.cos(angle), sin=Math.sin(angle);
   for(let i=0;i<N;i++){
     const t=2*Math.PI*i/N;
-    // unrotated ellipse in normalised (u,v) space
-    const u=aLat*Math.cos(t), v=bLat*Math.sin(t);
-    // rotate — use latitude-equivalent units for both axes
-    const dlat = u*cos - v*sin;
-    const dlng = (u*sin + v*cos) * (aLng/aLat); // scale lng to correct for aspect
-    pts.push(latlngToPixel([cx_lat+dlat, cx_lng+dlng]));
+    // Point on unrotated ellipse in metres
+    const u=aMet*Math.cos(t), v=bMet*Math.sin(t);
+    // Rotate in metre-space
+    const mx= u*cos-v*sin;   // metres east
+    const my= u*sin+v*cos;   // metres north
+    // Back to lat/lng
+    const lat=cLat+my/111320;
+    const lng=cLng+mx/(111320*cosLat);
+    pts.push(latlngToPixel([lat,lng]));
   }
   return pts;
 }
 
-// Wobble: small random pixel nudge for hand-drawn look
+// Wobble in pixels after projection (small, hand-drawn feel)
 function wobbleEllipse(pts, seed){
   let r=seed*9301+49297;
   return pts.map(([x,y])=>{
@@ -376,7 +380,7 @@ function wobbleEllipse(pts, seed){
   });
 }
 
-// Convert point array → smooth SVG path (1 Chaikin pass)
+// Convert point array → smooth SVG path (1 Chaikin pass, very gentle)
 function ellipseToPath(pts){
   const n=pts.length, s=[];
   for(let i=0;i<n;i++){
@@ -397,49 +401,78 @@ function pointInPolygon([px,py], poly){
   return inside;
 }
 
-// Build day-zone path in geo-space so size is zoom-invariant.
-// geoPts: [[lat,lng],...] all points (POIs + route samples)
-// poiGeoPts: [[lat,lng],...] POIs only (must be inside)
-// seed: per-day integer for deterministic wobble
-function buildDayPath(geoPts, poiGeoPts, seed){
-  if(!geoPts.length) return '';
+const ELLIPSE_PAD_METRES = 3500;   // base padding around outermost point
+const ELLIPSE_EXTRA_METRES = 1500; // extra per retry if POI falls outside
 
-  if(geoPts.length===1){
-    // Single point: circle with fixed geo radius
-    const [lat,lng]=geoPts[0];
-    const pad=geoPad(lat);
-    const r=ELLIPSE_PAD_METRES/111320+pad.latPad*0.5;
+/**
+ * Build day-zone path.
+ * Key design:
+ *  - Ellipse is FITTED and ORIENTED using ONLY poiGeoPts (the POIs).
+ *    This ensures the major axis aligns with the POI distribution, not route wiggles.
+ *  - allGeoPts (POIs + route samples) are used ONLY in the containment check,
+ *    so the ellipse also covers the route path if needed (may expand on retry).
+ *  - Everything is done in metre-space for correct orientation.
+ */
+function buildDayPath(allGeoPts, poiGeoPts, seed){
+  if(!allGeoPts.length) return '';
+
+  // Use POIs for fitting; fall back to all points if no POIs
+  const fitPts = poiGeoPts.length ? poiGeoPts : allGeoPts;
+
+  // Single point: circle
+  if(fitPts.length===1){
+    const [lat,lng]=fitPts[0];
+    const cosLat=Math.cos(lat*Math.PI/180)||1;
+    const rLat=ELLIPSE_PAD_METRES/111320;
+    const rLng=ELLIPSE_PAD_METRES/(111320*cosLat);
     const pts=[];
-    for(let i=0;i<48;i++){const t=2*Math.PI*i/48; pts.push(latlngToPixel([lat+r*Math.cos(t),lng+(r/Math.cos(lat*Math.PI/180))*Math.sin(t)]));}
+    for(let i=0;i<48;i++){const t=2*Math.PI*i/48; pts.push(latlngToPixel([lat+rLat*Math.cos(t),lng+rLng*Math.sin(t)]));}
     return ellipseToPath(wobbleEllipse(pts,seed));
   }
 
-  // Fit ellipse in lat/lng space
-  const {cx:cxLat, cy:cxLng, a:rawALat, b:rawBLat, angle} = fitEllipse(geoPts);
-  // Scale longitude semi-axis: degrees-lat and degrees-lng have different metre values
-  const cosLat = Math.cos(cxLat*Math.PI/180)||1;
-  const rawALng = rawALat;  // PCA angle was found in lat/lng space
-  const rawBLng = rawBLat;
+  // Two points: special case — thin ellipse aligned exactly between the two points
+  if(fitPts.length===2){
+    const [p0,p1]=fitPts;
+    const cosLat=Math.cos((p0[0]+p1[0])/2*Math.PI/180)||1;
+    // midpoint
+    const cLat=(p0[0]+p1[0])/2, cLng=(p0[1]+p1[1])/2;
+    // distance in metres
+    const dx=(p1[1]-p0[1])*111320*cosLat, dy=(p1[0]-p0[0])*111320;
+    const halfDist=Math.sqrt(dx*dx+dy*dy)/2;
+    const angleMet=Math.atan2(dy,dx);
+    // Force major axis = distance/2 + pad, minor axis = pad only
+    const aMet=halfDist+ELLIPSE_PAD_METRES;
+    const bMet=ELLIPSE_PAD_METRES*0.6; // flatter to indicate direction
+    const perim=geoEllipseAsPixels(cLat,cLng,aMet,bMet,angleMet,cosLat,60);
+    return ellipseToPath(wobbleEllipse(perim,seed));
+  }
 
-  for(let attempt=0; attempt<4; attempt++){
-    const extraMetres = attempt*ELLIPSE_EXTRA_METRES;
-    const padLat = (ELLIPSE_PAD_METRES+extraMetres)/111320;
-    const padLng = (ELLIPSE_PAD_METRES+extraMetres)/(111320*cosLat);
-    const aLat = Math.max(rawALat+padLat, padLat);
-    const bLat = Math.max(rawBLat+padLat, padLat);
-    const aLng = aLat/cosLat;  // keep aspect ratio correct
-    const bLng = bLat/cosLat;
+  // General case: fit to POIs, then expand to contain allGeoPts
+  const {cLat,cLng,aMet:rawA,bMet:rawB,angleMet,cosLat}=fitEllipseGeo(fitPts);
 
-    const perim  = geoEllipseAsPixels(cxLat,cxLng,aLat,aLng,bLat,bLng,angle,60);
-    const wobbled = wobbleEllipse(perim, seed);
-    const pathD  = ellipseToPath(wobbled);
+  // All points that MUST be inside (POIs + route endpoints)
+  // Route midpoints we don't require containment for — only endpoints
+  const mustContainPx=[...allGeoPts.map(latlngToPixel)];
 
-    // Verify all POI pixels are inside
-    const poly = pathD.replace(/[MLZ]/g,' ').trim().split(/\s+/).reduce((acc,_,i,arr)=>{
+  for(let attempt=0;attempt<4;attempt++){
+    const extra=attempt*ELLIPSE_EXTRA_METRES;
+    const pad=ELLIPSE_PAD_METRES+extra;
+    const aMet=Math.max(rawA+pad, pad);
+    const bMet=Math.max(rawB+pad*0.6, pad*0.6); // minor axis gets slightly less pad for elongated shape
+
+    const perim=geoEllipseAsPixels(cLat,cLng,aMet,bMet,angleMet,cosLat,64);
+    const wobbled=wobbleEllipse(perim,seed);
+    const pathD=ellipseToPath(wobbled);
+
+    // Parse path to polygon for containment check
+    const poly=pathD.replace(/[MLZ]/g,' ').trim().split(/\s+/).reduce((acc,_,i,arr)=>{
       if(i%2===0){const x=parseFloat(arr[i]),y=parseFloat(arr[i+1]);if(!isNaN(x)&&!isNaN(y))acc.push([x,y]);}return acc;
     },[]);
-    const allIn = poiGeoPts.map(latlngToPixel).every(pt=>pointInPolygon(pt,poly));
-    if(allIn || attempt===3) return pathD;
+
+    // Check only POI pixels must be inside (not every route point)
+    const poiPx=poiGeoPts.map(latlngToPixel);
+    const allIn=poiPx.every(pt=>pointInPolygon(pt,poly));
+    if(allIn||attempt===3) return pathD;
   }
   return '';
 }
@@ -644,6 +677,10 @@ function applyAllMarkerVisibility(){
     if(!r.poly) return;
     const hidden=r.dayId && isDayHidden(r.dayId);
     try{ hidden?map.removeLayer(r.poly):map.addLayer(r.poly); }catch(e){}
+    // Also hide hour dots when route is hidden
+    if(r.hourDotMarkers) r.hourDotMarkers.forEach(m=>{
+      try{ hidden?map.removeLayer(m):map.addLayer(m); }catch(e){}
+    });
   });
 }
 
