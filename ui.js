@@ -40,7 +40,7 @@ const TL = {
 };
 TL.st.addTo(map);
 
-const svgEl = document.getElementById('day-zone-svg');
+// Day zone SVG is managed by zones.js via getZoneSvg() — no global reference needed here
 
 function mkPin(c,e,sz=27){
   return L.divIcon({className:'',
