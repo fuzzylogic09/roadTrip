@@ -460,13 +460,23 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
+/* Sequential cache-busted module loader — guarantees execution order */
 (function(){
-  var ts=Date.now();
-  var cssLink=document.getElementById('app-css');
-  if(cssLink)cssLink.href='style.css?v='+ts;
-  var s=document.createElement('script');
-  s.src='app.js?v='+ts;
-  document.body.appendChild(s);
+  var ts = Date.now();
+  var cssLink = document.getElementById('app-css');
+  if(cssLink) cssLink.href = 'style.css?v='+ts;
+
+  var modules = ['config','ui','zones','visibility','pois','gps','events'];
+  var i = 0;
+  function loadNext(){
+    if(i >= modules.length) return;
+    var s = document.createElement('script');
+    s.src = modules[i++]+'.js?v='+ts;
+    s.onload = loadNext;   // load next only after this one has executed
+    document.body.appendChild(s);
+  }
+  // Wait for Leaflet to be ready before starting (it's loaded synchronously above)
+  loadNext();
 })();
 </script>
 </body>
