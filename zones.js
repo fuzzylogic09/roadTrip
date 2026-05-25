@@ -1,11 +1,10 @@
-
 /* ===================================================
    DAY ZONE OVERLAY
 =================================================== */
 function latlngToPixel(ll){
+  // SVG is position:absolute inside #map, so container point = SVG point directly
   const pt = map.latLngToContainerPoint(L.latLng(ll[0], ll[1]));
-  const rect = map.getContainer().getBoundingClientRect();
-  return [pt.x + rect.left, pt.y + rect.top];
+  return [pt.x, pt.y];
 }
 
 /* --- Ellipse zone geometry --- */
@@ -205,7 +204,8 @@ function scheduleZoneRefresh(){
 function refreshDayZones(){
   if(!CFG.showDayZones){ svgEl.innerHTML=''; return; }
   const ns = 'http://www.w3.org/2000/svg';
-  const W = window.innerWidth, H = window.innerHeight;
+  const container = map.getContainer();
+  const W = container.clientWidth, H = container.clientHeight;
   svgEl.setAttribute('width', W); svgEl.setAttribute('height', H);
   svgEl.setAttribute('viewBox', '0 0 '+W+' '+H);
   svgEl.innerHTML = '';
@@ -249,11 +249,10 @@ function refreshDayZones(){
     const allGeoPts=poiGeoPts; // all points are now used for fitting
     if(!allGeoPts.length) return;
 
-    // Quick viewport cull: skip days entirely off-screen
     const margin=600;
     const anyVisible=allGeoPts.some(geo=>{
       const [x,y]=latlngToPixel(geo);
-      return x>-margin&&x<W+margin&&y>-margin&&y<H+margin;
+      return x>-margin && x<W+margin && y>-margin && y<H+margin;
     });
     if(!anyVisible) return;
 
@@ -309,4 +308,3 @@ function refreshDayZones(){
     }
   });
 }
-
