@@ -1,7 +1,7 @@
 /* =========================================================
-   RoadTrip Planner — app.js  v8.4.0
+   RoadTrip Planner — app.js  v8.5.0
    ========================================================= */
-const APP_VERSION = '8.4.0';
+const APP_VERSION = '8.5.0';
 const GOOGLE_CLIENT_ID = '940235006674-1mfg6a2qn7hkqu78irn2af34a507i76u.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'RoadTripPlanner';
 
@@ -22,7 +22,14 @@ const CFG_DEFAULTS = {
   fontScale:         125,
   darkMode:          false,
 };
-let CFG = Object.assign({}, CFG_DEFAULTS, JSON.parse(localStorage.getItem('rtp_cfg')||'{}'));
+const _storedCfg = JSON.parse(localStorage.getItem('rtp_cfg') || '{}');
+// Migration v8.5.0: showDayZones default changed false→true; clear cached false so new default applies
+if (_storedCfg.showDayZones === false && !_storedCfg._v850) {
+  delete _storedCfg.showDayZones;
+  _storedCfg._v850 = 1;
+  localStorage.setItem('rtp_cfg', JSON.stringify(_storedCfg));
+}
+let CFG = Object.assign({}, CFG_DEFAULTS, _storedCfg);
 
 function saveCFG(){ localStorage.setItem('rtp_cfg', JSON.stringify(CFG)); }
 
