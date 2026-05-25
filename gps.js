@@ -131,6 +131,6 @@ function clearAll(s){
   S.dayOrderLines.forEach(l=>map.removeLayer(l)); S.dayOrderLines=[];
   S.pois.length=0; S.routes.length=0; S.days.length=0;
   S.eatingBudgets={}; S.eatingDefault=0; S.dayVisibility={}; S.poiVisibility={}; S.allPOIsHidden=false;
-  svgEl.innerHTML=''; ra(); if(!s) toast('Cleared','ok');
+  getZoneSvg().innerHTML=''; ra(); if(!s) toast('Cleared','ok');
 }
 function expGPX(){ const w=S.pois.map(p=>'  <wpt lat="'+p.lat+'" lon="'+p.lng+'"><name>'+esc(p.name)+'</name></wpt>').join('\n'); const t=S.routes.map(r=>'  <trk><name>'+esc(r.fromName)+'→'+esc(r.toName)+'</name><trkseg>'+r.coords.map(c=>'<trkpt lat="'+c[0]+'" lon="'+c[1]+'"></trkpt>').join('')+'</trkseg></trk>').join('\n'); const b=new Blob(['<?xml version="1.0"?>\n<gpx version="1.1">\n'+w+'\n'+t+'\n</gpx>'],{type:'application/gpx+xml'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='roadtrip.gpx'; a.click(); toast('GPX exported','ok'); }
