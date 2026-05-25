@@ -14,12 +14,13 @@ const DAY_ZONE_COLORS = [
    SETTINGS / CONFIG  (persisted to localStorage)
 =================================================== */
 const CFG_DEFAULTS = {
-  showDayZones:   false,
-  showZoneTitles: true,
-  showPoiLabels:  false,
-  showHourDots:   true,
-  fontScale:      125,   // percent, desktop only
-  darkMode:       false,
+  showDayZones:      false,
+  showZoneTitles:    true,
+  showPoiLabels:     false,
+  showHourDots:      true,
+  showDayOrderLines: false,
+  fontScale:         125,
+  darkMode:          false,
 };
 let CFG = Object.assign({}, CFG_DEFAULTS, JSON.parse(localStorage.getItem('rtp_cfg')||'{}'));
 
@@ -48,6 +49,10 @@ function applySettings(){
   const hdBtn = qs('#stog-hour-dots');
   if(hdBtn) hdBtn.classList.toggle('on', CFG.showHourDots);
   if(CFG.showHourDots) refreshAllHourDots(); else clearAllHourDots();
+  // Day order lines
+  const dolBtn = qs('#stog-day-order-lines');
+  if(dolBtn) dolBtn.classList.toggle('on', CFG.showDayOrderLines);
+  renderDayOrderLines();
   // Font scale
   const slider = qs('#font-scale-slider');
   if(slider) slider.value = CFG.fontScale;
@@ -92,9 +97,11 @@ const S = {
   gd:{token:null,user:null,folderId:null},
   // Eating budgets: dayId -> {value, manual}
   // manual=true means user explicitly set it (don't overwrite with default change)
-  eatingBudgets:{},
+  eatingBudgets:{},   // dayId -> number (explicitly set)
   eatingDefault: 0,
-  costType: 'total', // current modal state: 'total' | 'perday'
+  costType: 'total',
+  dayVisibility: {},  // dayId -> bool (true=visible, default true)
+  dayOrderLines: [],  // Leaflet polyline objects for POI-order lines
 };
 
 const CATS={general:'📍',hotel:'🏨',restaurant:'🍽️',attraction:'🎯',hike:'🥾',view:'🌄',gas:'⛽',parking:'🅿️',info:'ℹ️'};
@@ -118,7 +125,15 @@ function closeDrawer(force){
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-backdrop').classList.remove('on');
   document.getElementById('btn-drawer').classList.remove('open');
-  // Wait for the CSS slide-out transition (~280ms) then tell Leaflet to reclaim the space
+  // When a pinned drawer is force-closed (✕ button), un-pin so map can fill the space
+  if(drawerPinned && !isMobile() && force === true){
+    drawerPinned = false;
+    localStorage.setItem('rtp_pin','0');
+    document.body.classList.remove('drawer-pinned');
+    const pinBtn=qs('#btn-pin'); if(pinBtn) pinBtn.classList.remove('pin-active');
+    const stogPin=qs('#stog-pin'); if(stogPin) stogPin.classList.remove('on');
+  }
+  // Wait for CSS slide-out transition then tell Leaflet to reclaim the space
   setTimeout(()=>{ map.invalidateSize(); scheduleZoneRefresh(); }, 300);
 }
 function toggleDrawer(){ isDrawerOpen() ? closeDrawer(true) : openDrawer(); }
@@ -197,7 +212,7 @@ function getFP(){ return { c: parseFloat(qs('#f-consump').value)||7, p: parseFlo
 function routeFuel(r){ if(r.mode!=='car') return 0; const fp=getFP(); return +(r.dist*(fp.c/100)*fp.p).toFixed(2); }
 function routeCost(r){ return +(routeFuel(r)+(r.fixedCost||0)).toFixed(2); }
 
-// Effective cost of a POI (handles per-day multiplier)
+// Effective cost of a POI — TOTAL across all days (for grand total / POI card)
 function poiEffectiveCost(p){
   const base = p.cost || 0;
   if(p.costType === 'perday'){
@@ -206,12 +221,18 @@ function poiEffectiveCost(p){
   }
   return base;
 }
+// Cost of a POI attributed to ONE specific day (for per-day cost rows)
+function poiCostForDay(p){
+  const base = p.cost || 0;
+  // Whether total or perday, we show `base` per day (the user entered a per-day amount)
+  return base;
+}
 
 function totalFuelCost(){ let t=0; S.routes.forEach(r=>t+=routeFuel(r)); return +t.toFixed(2); }
 function totalHotelCost(){ let t=0; S.pois.filter(p=>p.cat==='hotel').forEach(p=>t+=poiEffectiveCost(p)); return +t.toFixed(2); }
 function totalActivityCost(){ let t=0; S.pois.filter(p=>['attraction','hike','view','general','info'].includes(p.cat)).forEach(p=>t+=poiEffectiveCost(p)); return +t.toFixed(2); }
 function totalTransportFixed(){ let t=0; S.pois.filter(p=>p.cat==='gas'||p.cat==='parking').forEach(p=>t+=poiEffectiveCost(p)); S.routes.forEach(r=>t+=(r.fixedCost||0)); return +t.toFixed(2); }
-function totalEatingBudget(){ let t=0; Object.values(S.eatingBudgets).forEach(v=>t+=(+v||0)); return +t.toFixed(2); }
+function totalEatingBudget(){ let t=0; S.days.forEach(d=>t+=eatingForDay(d.id)); return +t.toFixed(2); }
 function totalRestaurantPOI(){ let t=0; S.pois.filter(p=>p.cat==='restaurant').forEach(p=>t+=poiEffectiveCost(p)); return +t.toFixed(2); }
 function tripCost(){ return +(totalFuelCost()+totalHotelCost()+totalActivityCost()+totalTransportFixed()+totalEatingBudget()+totalRestaurantPOI()).toFixed(2); }
 
@@ -224,7 +245,7 @@ function dayCost(d){
   let t=0;
   d.items.forEach(it=>{
     if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r) t+=routeCost(r); }
-    if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p) t+=poiEffectiveCost(p); }
+    if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p) t+=poiCostForDay(p); }
   });
   t += eatingForDay(d.id);
   return +t.toFixed(2);
@@ -236,25 +257,30 @@ function dayCost(d){
 // Apply default to days that haven't been manually set
 function applyEatingDefault(val){
   S.eatingDefault = +val || 0;
-  S.days.forEach(d => {
-    // Only fill if this day hasn't been manually touched
-    if(S.eatingBudgets[d.id] === undefined || S.eatingBudgets[d.id] === null){
-      // leave as undefined so eatingForDay() returns the default
-    }
-    // Note: we never overwrite existing manual values
-  });
+  // Re-render day eating inputs so the placeholder text (and any auto-value) updates
+  // Note: we never overwrite days where eatingBudgets[id] is explicitly set
   renderEatingBudgetRows();
   updStats();
+  // Also refresh the eating inputs inside the rendered days list
+  qsa('.day-eating-input').forEach(inp=>{
+    const did=+inp.dataset.did;
+    const overridden = S.eatingBudgets[did] !== undefined && S.eatingBudgets[did] !== null;
+    if(!overridden){
+      inp.placeholder = S.eatingDefault ? '$'+S.eatingDefault+' (default)' : '$0';
+      // Clear any stale entered value so the placeholder shows through
+      if(inp.value === '') inp.placeholder = S.eatingDefault ? '$'+S.eatingDefault+' (default)' : '$0';
+    }
+  });
 }
 
 function setDayEating(did, val, manual){
   if(manual){
     S.eatingBudgets[did] = +val || 0;
   } else {
-    // User cleared the field — revert to default (mark as undefined)
     delete S.eatingBudgets[did];
   }
-  updStats();
+  renderEatingBudgetRows(); // updates the total in routes tab
+  updStats();               // updates grand total in save tab
 }
 
 function renderEatingBudgetRows(){
@@ -531,8 +557,55 @@ function renderPoiLabels(){
 }
 
 /* ===================================================
-   HOURLY DOTS
+   DAY ORDER LINES  (straight lines joining POIs in day order)
 =================================================== */
+function renderDayOrderLines(){
+  // Clear existing
+  S.dayOrderLines.forEach(l=>map.removeLayer(l));
+  S.dayOrderLines=[];
+  if(!CFG.showDayOrderLines) return;
+  S.days.forEach((d,di)=>{
+    if(isDayHidden(d.id)) return;
+    const color=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+    const pts=[];
+    d.items.forEach(it=>{
+      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p) pts.push([p.lat,p.lng]); }
+    });
+    if(pts.length<2) return;
+    const line=L.polyline(pts,{color,weight:2,opacity:0.75,dashArray:'6 4'}).addTo(map);
+    // Number each segment with a small order label
+    pts.forEach((pt,i)=>{
+      if(i===0) return;
+      const lbl=L.marker([(pts[i-1][0]+pt[0])/2,(pts[i-1][1]+pt[1])/2],{
+        icon:L.divIcon({className:'',html:'<div style="background:'+color+';color:#fff;font-size:.55rem;font-weight:800;border-radius:8px;padding:1px 4px;white-space:nowrap;pointer-events:none;">'+i+'</div>',iconSize:[null,null],iconAnchor:[0,0]}),
+        interactive:false,zIndexOffset:-600
+      }).addTo(map);
+      S.dayOrderLines.push(lbl);
+    });
+    S.dayOrderLines.push(line);
+  });
+}
+
+/* ===================================================
+   DAY VISIBILITY
+=================================================== */
+function isDayHidden(did){ return S.dayVisibility[did]===false; }
+function setDayVisibility(did,visible){
+  if(visible) delete S.dayVisibility[did]; // true is default — don't store it
+  else S.dayVisibility[did]=false;
+  // Show/hide the POI markers for this day
+  const d=S.days.find(x=>x.id===did);
+  if(d) d.items.forEach(it=>{
+    if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p&&p.marker){ try{ visible?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){} } }
+    if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r&&r.poly){ try{ visible?map.addLayer(r.poly):map.removeLayer(r.poly); }catch(e){} } }
+  });
+  renderDayOrderLines();
+  scheduleZoneRefresh();
+  renderDays();
+}
+function setAllDaysVisibility(visible){
+  S.days.forEach(d=>setDayVisibility(d.id,visible));
+}
 function interpolateCoords(coords, fraction){
   const totalLen = coords.reduce((acc,_,i)=>{ if(!i) return acc; return acc+L.latLng(coords[i-1]).distanceTo(L.latLng(coords[i])); },0);
   const target = fraction * totalLen; let walked=0;
@@ -635,8 +708,20 @@ function focusPOI(id){ const p=S.pois.find(x=>x.id===id); if(!p) return; closeDr
 
 function renderPOIs(){
   const el=qs('#poi-list'); qs('#pcnt').textContent=S.pois.length;
-  const vis=S.pois.filter(p=>S.fcat==='all'||p.cat===S.fcat);
-  S.pois.forEach(p=>{ try{ (S.fcat==='all'||p.cat===S.fcat)?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){} });
+  const vis=S.pois
+    .filter(p=>S.fcat==='all'||p.cat===S.fcat)
+    .slice()
+    .sort((a,b)=>a.name.localeCompare(b.name,'fr',{sensitivity:'base'}));
+  S.pois.forEach(p=>{
+    try{
+      const shouldShow=(S.fcat==='all'||p.cat===S.fcat)
+        && !(p.dayIds||[]).length
+          ? true
+          : (S.fcat==='all'||p.cat===S.fcat) && (p.dayIds||[]).every(did=>!isDayHidden(did))
+            || (S.fcat==='all'||p.cat===S.fcat) && !(p.dayIds||[]).some(did=>isDayHidden(did));
+      ((S.fcat==='all'||p.cat===S.fcat)&&!(p.dayIds||[]).some(did=>isDayHidden(did)))?map.addLayer(p.marker):map.removeLayer(p.marker);
+    }catch(e){}
+  });
   if(!vis.length){ el.innerHTML='<div style="font-size:.73rem;color:var(--muted);">No POIs'+(S.fcat!=='all'?' in this category':'')+'.</div>'; return; }
   el.innerHTML=vis.map(p=>{
     const dayBadges=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); if(!d) return''; const di=S.days.indexOf(d); const c=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length]; return'<span class="pday-badge" style="background:'+c+';">'+esc(d.title)+'</span>'; }).join('');
@@ -713,7 +798,7 @@ function renderDays(){
     const eatingOverridden=S.eatingBudgets[d.id]!==undefined&&S.eatingBudgets[d.id]!==null;
     const costRows=[];
     d.items.forEach(it=>{
-      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p&&poiEffectiveCost(p)>0) costRows.push({l:(CATS[p.cat]||'📍')+' '+p.name+(p.costType==='perday'?' (per day)':''),c:poiEffectiveCost(p),s:''}); }
+      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p&&poiCostForDay(p)>0) costRows.push({l:(CATS[p.cat]||'📍')+' '+p.name+(p.costType==='perday'?' (per day)':''),c:poiCostForDay(p),s:''}); }
       if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r){ const tot=routeCost(r),fuel=routeFuel(r); if(tot>0){ const sub=[]; if(fuel>0) sub.push('fuel $'+fuel.toFixed(2)); if(r.fixedCost>0) sub.push('fixed $'+r.fixedCost.toFixed(2)); costRows.push({l:(MI[r.mode]||'🛣️')+' '+r.fromName+'→'+r.toName,c:tot,s:sub.join(' + ')}); } } }
     });
     if(eating>0) costRows.push({l:'🍽️ Eating'+(eatingOverridden?' (custom)':' (default)'),c:eating,s:''});
@@ -723,12 +808,11 @@ function renderDays(){
       items+='<div class="day-dropzone" data-did="'+d.id+'" data-idx="'+idx+'"></div>';
       if(it.type==='poi'){
         const p=S.pois.find(x=>x.id===it.id); if(!p) return;
-        const eff=poiEffectiveCost(p);
         items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="poi" data-iid="'+p.id+'">'
           +'<span class="di-grip">⋮⋮</span>'
           +'<div class="dipin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
           +'<span class="diname" ondblclick="editPOI('+p.id+')" onclick="focusPOI('+p.id+')">'+esc(p.name)+'</span>'
-          +(eff?'<span class="di-cost">$'+eff.toFixed(2)+'</span>':'')
+          +(poiCostForDay(p)?'<span class="di-cost">$'+poiCostForDay(p).toFixed(2)+'</span>':'')
           +'<button class="btn bg bic bsm" onclick="editPOI('+p.id+')" title="Edit">✏️</button>'
           +'<button class="btn bg bic bsm" onclick="focusPOI('+p.id+')">👁</button>'
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
@@ -754,19 +838,21 @@ function renderDays(){
     }
     const zoneColor=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
     const eatPlaceholder=S.eatingDefault?'$'+S.eatingDefault+' (default)':'$0';
-    return '<div class="dayc" data-dcid="'+d.id+'">'
+    const hidden=isDayHidden(d.id);
+    return '<div class="dayc" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
       +'<div class="dayh"><div class="dayn-bubble" style="background:'+zoneColor+';">'+(di+1)+'</div>'
       +'<input class="dayti" value="'+esc(d.title)+'" onchange="updDay('+d.id+',\'title\',this.value)">'
       +'<input class="daydi" type="date"'+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value)">'
+      +'<button class="btn bg bic bsm" onclick="setDayVisibility('+d.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show day':'Hide day')+'" style="font-size:.85rem;">'+(hidden?'👁‍🗨':'👁')+'</button>'
       +'<button class="btn br bic bsm" onclick="delDay('+d.id+')">✕</button></div>'
       +'<div class="dayst"><div class="daystat">📍 <b>'+dpois.length+'</b></div>'+(km?'<div class="daystat">🛣️ <b>'+km.toFixed(0)+'km</b></div>':'')+(dur?'<div class="daystat">⏱ <b>'+fmtD(dur)+'</b></div>':'')+(dc?'<div class="daystat gold">💰 <b>$'+dc.toFixed(2)+'</b></div>':'')+'</div>'
       +'<div class="dayb">'+items+costSummary
       +'<div style="display:flex;align-items:center;gap:5px;padding:4px 2px 2px;">'
         +'<span style="font-size:.62rem;color:var(--green);font-weight:700;">🍽️ Eating:</span>'
-        +'<input type="number" class="inp" min="0" step="1" placeholder="'+eatPlaceholder+'" style="width:90px;padding:2px 5px;font-size:.65rem;" '
+        +'<input type="number" class="inp day-eating-input" min="0" step="1" data-did="'+d.id+'" placeholder="'+eatPlaceholder+'" style="width:90px;padding:2px 5px;font-size:.65rem;" '
           +(eatingOverridden?'value="'+S.eatingBudgets[d.id]+'"':'')+' '
-          +'oninput="setDayEating('+d.id+',+this.value,this.value!==\'\');updStats();" '
-          +'onblur="if(this.value===\'\'){setDayEating('+d.id+',0,false);this.placeholder=\''+eatPlaceholder+'\';updStats();}">'
+          +'oninput="setDayEating('+d.id+',+this.value,this.value!==\'\');" '
+          +'onblur="if(this.value===\'\'){setDayEating('+d.id+',0,false);}">'
         +(eatingOverridden?'<button class="btn bg bsm" onclick="setDayEating('+d.id+',0,false);ra();" title="Reset to default">↩</button>':'')
       +'</div>'
       +'<div class="dayacts"><button class="btn bg bsm" onclick="addNote('+d.id+')">📝 Note</button><button class="btn bg bsm" onclick="focusDay('+d.id+')">🗺️ View</button></div></div>'
@@ -961,6 +1047,7 @@ function tripData(){
     settings:Object.assign({},CFG),
     eatingDefault:S.eatingDefault,
     eatingBudgets:Object.assign({},S.eatingBudgets),
+    dayVisibility:Object.assign({},S.dayVisibility),
     pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayIds:p.dayIds||[],cost:p.cost||0,costType:p.costType||'total'})),
     routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4'})),
     days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
@@ -975,6 +1062,7 @@ async function loadData(json){
     if(d.settings){ Object.assign(CFG, d.settings); saveCFG(); applySettings(); }
     S.eatingDefault = +(d.eatingDefault||0);
     if(d.eatingBudgets) Object.assign(S.eatingBudgets, d.eatingBudgets);
+    if(d.dayVisibility) Object.assign(S.dayVisibility, d.dayVisibility);
     (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
     (d.pois||[]).forEach(p=>{ const dayIds=p.dayIds||(p.dayId?[Number(p.dayId)]:[]); addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayIds:dayIds.map(Number),cost:+(p.cost||0),costType:p.costType||'total'}); });
     fillRS('rf','rt','rd');
@@ -989,7 +1077,15 @@ async function loadData(json){
     toast('Loaded (v'+(d.appVersion||'?')+', '+(d.savedAt?new Date(d.savedAt).toLocaleDateString():'?')+')','ok');
   }catch(e){ toast('Invalid JSON','err'); console.error(e); }
 }
-function clearAll(s){ S.pois.forEach(p=>map.removeLayer(p.marker)); S.routes.forEach(r=>{ if(r.poly) map.removeLayer(r.poly); clearRouteHourDots(r); }); clearLines(); poiLabelLayer.clearLayers(); S.pois.length=0; S.routes.length=0; S.days.length=0; S.eatingBudgets={}; S.eatingDefault=0; svgEl.innerHTML=''; ra(); if(!s) toast('Cleared','ok'); }
+function clearAll(s){
+  S.pois.forEach(p=>map.removeLayer(p.marker));
+  S.routes.forEach(r=>{ if(r.poly) map.removeLayer(r.poly); clearRouteHourDots(r); });
+  clearLines(); poiLabelLayer.clearLayers();
+  S.dayOrderLines.forEach(l=>map.removeLayer(l)); S.dayOrderLines=[];
+  S.pois.length=0; S.routes.length=0; S.days.length=0;
+  S.eatingBudgets={}; S.eatingDefault=0; S.dayVisibility={};
+  svgEl.innerHTML=''; ra(); if(!s) toast('Cleared','ok');
+}
 function expGPX(){ const w=S.pois.map(p=>'  <wpt lat="'+p.lat+'" lon="'+p.lng+'"><name>'+esc(p.name)+'</name></wpt>').join('\n'); const t=S.routes.map(r=>'  <trk><name>'+esc(r.fromName)+'→'+esc(r.toName)+'</name><trkseg>'+r.coords.map(c=>'<trkpt lat="'+c[0]+'" lon="'+c[1]+'"></trkpt>').join('')+'</trkseg></trk>').join('\n'); const b=new Blob(['<?xml version="1.0"?>\n<gpx version="1.1">\n'+w+'\n'+t+'\n</gpx>'],{type:'application/gpx+xml'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='roadtrip.gpx'; a.click(); toast('GPX exported','ok'); }
 
 /* ===================================================
@@ -1017,7 +1113,7 @@ function updStats(){
   renderEatingBudgetRows();
   scheduleZoneRefresh();
 }
-function ra(){ renderPOIs(); renderDays(); renderRoutes(); renderNearby(); updStats(); fillRS('rf','rt','rd'); refMDay(); }
+function ra(){ renderPOIs(); renderDays(); renderRoutes(); renderNearby(); updStats(); fillRS('rf','rt','rd'); refMDay(); renderDayOrderLines(); }
 
 /* ===================================================
    EVENTS
@@ -1081,8 +1177,27 @@ function focusRouteInPanel(rid){ qsa('.tab').forEach(function(t){ t.classList.to
 
 /* ===== DRAWER PIN ===== */
 var drawerPinned = localStorage.getItem('rtp_pin')==='1';
-function applyPin(){ var btn=qs('#btn-pin'); if(drawerPinned){ document.body.classList.add('drawer-pinned'); if(btn) btn.classList.add('pin-active'); document.getElementById('drawer-backdrop').classList.remove('on'); } else{ document.body.classList.remove('drawer-pinned'); if(btn) btn.classList.remove('pin-active'); } }
-function togglePin(){ if(window.innerWidth<769) return; drawerPinned=!drawerPinned; localStorage.setItem('rtp_pin',drawerPinned?'1':'0'); applyPin(); if(drawerPinned) openDrawer(); applySettings(); }
+function applyPin(){
+  var btn=qs('#btn-pin');
+  if(drawerPinned){
+    document.body.classList.add('drawer-pinned');
+    if(btn) btn.classList.add('pin-active');
+    document.getElementById('drawer-backdrop').classList.remove('on');
+  } else {
+    document.body.classList.remove('drawer-pinned');
+    if(btn) btn.classList.remove('pin-active');
+  }
+  // Always invalidate so map reclaims correct space
+  setTimeout(()=>{ map.invalidateSize(); scheduleZoneRefresh(); }, 300);
+}
+function togglePin(){
+  if(window.innerWidth<769) return;
+  drawerPinned=!drawerPinned;
+  localStorage.setItem('rtp_pin',drawerPinned?'1':'0');
+  applyPin();
+  if(drawerPinned) openDrawer();
+  applySettings();
+}
 
 /* ===== SHIFT DATES ===== */
 function openShiftModal(){ var first=S.days.find(function(d){return d.date;}); if(first) qs('#shift-start').value=first.date; qs('#shift-delta').value=''; var el=qs('#shift-preview'); el.style.display='none'; el._delta=0; qs('#shiftmbk').style.display='flex'; }
