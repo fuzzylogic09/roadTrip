@@ -10,11 +10,19 @@ map.getPane('dayZonePane').style.pointerEvents = 'none';
 
 // We'll draw into a single <svg> element appended to the pane
 let _zoneSvg = null;
+function _resizeZoneSvg(){
+  if(!_zoneSvg) return;
+  const c = map.getContainer();
+  _zoneSvg.setAttribute('width', c.clientWidth);
+  _zoneSvg.setAttribute('height', c.clientHeight);
+}
 function getZoneSvg(){
   if(!_zoneSvg){
     _zoneSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-    _zoneSvg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;overflow:visible;pointer-events:none;';
+    _zoneSvg.style.cssText='position:absolute;top:0;left:0;overflow:visible;pointer-events:none;';
     map.getPane('dayZonePane').appendChild(_zoneSvg);
+    _resizeZoneSvg();
+    map.on('resize', _resizeZoneSvg);
   }
   return _zoneSvg;
 }
