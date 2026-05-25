@@ -18,9 +18,10 @@
 <link id="app-css" rel="stylesheet" href="style.css?v=__BUILD__">
 </head>
 <body>
-<div id="map"></div>
-<!-- Day zone SVG overlay — sized by JS on each redraw -->
-<svg id="day-zone-svg" xmlns="http://www.w3.org/2000/svg" style="position:fixed;top:0;left:0;pointer-events:none;z-index:50;overflow:visible;"></svg>
+<div id="map">
+  <!-- Day zone SVG — inside map container so Leaflet popup z-index (700) beats it (250) -->
+  <svg id="day-zone-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
 
 <!-- GPS live badge -->
 <div id="gbadge">
