@@ -139,13 +139,12 @@
         <summary>Eating Budget</summary>
         <div class="resto-inner">
           <div style="font-size:.64rem;color:var(--muted);margin-bottom:8px;line-height:1.65;">
-            Set a <b>default daily eating budget</b> that auto-fills every day. Override individual days below or directly in the Days tab. Changing the default will <b>not</b> overwrite days you've already customised.
+            Set a <b>default daily eating budget</b> applied to every day. You can override it per-day in the Days tab.
           </div>
-          <div class="fr2" style="margin-bottom:6px;">
-            <div><label class="lbl">Default per day ($)</label><input class="inp" id="eating-default" type="number" min="0" step="1" placeholder="0" oninput="applyEatingDefault(+this.value)"></div>
-            <div style="display:flex;align-items:flex-end;padding-bottom:1px;"><span style="font-size:.62rem;color:var(--muted);line-height:1.5;">Auto-fills days<br>not yet set</span></div>
+          <div class="fld">
+            <label class="lbl">Default per day ($)</label>
+            <input class="inp" id="eating-default" type="number" min="0" step="1" placeholder="0" oninput="applyEatingDefault(+this.value)">
           </div>
-          <div id="eating-day-rows"></div>
           <div class="resto-total" id="eating-total">Total eating budget: <b>$0.00</b></div>
         </div>
       </details>
