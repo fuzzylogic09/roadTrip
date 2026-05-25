@@ -101,9 +101,11 @@
         <button class="btn ba bic" id="btn-srch">🔍</button>
       </div>
       <div id="srdr"></div>
-      <div style="display:flex;gap:5px;margin-bottom:7px;">
+      <div style="display:flex;gap:5px;margin-bottom:7px;align-items:center;">
         <button class="btn bg bsm" id="btn-place" style="flex:1;">📍 Click map</button>
         <button class="btn bg bsm" id="btn-new" style="flex:1;">+ New POI</button>
+        <button class="btn bg bic bsm" onclick="setAllPOIsVisibility(true)" title="Show all POIs" style="font-size:.8rem;">👁</button>
+        <button class="btn bg bic bsm" onclick="setAllPOIsVisibility(false)" title="Hide all POIs" style="font-size:.8rem;">👁‍🗨</button>
       </div>
       <div class="sec"><span>Backlog</span><span class="badge" id="pcnt">0</span><span class="sl"></span></div>
       <div id="poi-list"></div>
