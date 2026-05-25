@@ -582,7 +582,10 @@ function renderDayOrderLines(){
     const color=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
     const pts=[];
     d.items.forEach(it=>{
-      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p) pts.push([p.lat,p.lng]); }
+      if(it.type==='poi'){
+        const p=S.pois.find(x=>x.id===it.id);
+        if(p && poiEffectivelyVisible(p)) pts.push([p.lat,p.lng]);
+      }
     });
     if(pts.length<2) return;
     const line=L.polyline(pts,{color,weight:2,opacity:0.75,dashArray:'6 4'}).addTo(map);
@@ -600,42 +603,78 @@ function renderDayOrderLines(){
 }
 
 /* ===================================================
-   DAY VISIBILITY
+   UNIFIED VISIBILITY   (day + individual POI)
 =================================================== */
 function isDayHidden(did){ return S.dayVisibility[did]===false; }
-function setDayVisibility(did,visible){
-  if(visible) delete S.dayVisibility[did]; // true is default — don't store it
-  else S.dayVisibility[did]=false;
-  // Show/hide the POI markers for this day
-  const d=S.days.find(x=>x.id===did);
-  if(d) d.items.forEach(it=>{
-    if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p&&p.marker){ try{ visible?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){} } }
-    if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r&&r.poly){ try{ visible?map.addLayer(r.poly):map.removeLayer(r.poly); }catch(e){} } }
-  });
-  renderDayOrderLines();
-  scheduleZoneRefresh();
-  renderDays();
-}
-function setAllDaysVisibility(visible){
-  S.days.forEach(d=>setDayVisibility(d.id,visible));
+
+/**
+ * Effective visibility of a POI on the map — combines both sources:
+ *   1. Individual POI toggle (poiVisibility)
+ *   2. Day visibility (dayVisibility)
+ *
+ * Rules:
+ *   - If individually hidden → always hidden.
+ *   - If individually visible AND has day assignments:
+ *       visible when AT LEAST ONE assigned day is visible.
+ *   - If individually visible AND has NO day assignments (free POI):
+ *       always visible (unaffected by day toggles).
+ */
+function poiEffectivelyVisible(p){
+  if(S.poiVisibility[p.id]===false) return false;
+  const days=p.dayIds||[];
+  if(!days.length) return true;               // free POI — days don't affect it
+  return days.some(did=>!isDayHidden(did));   // visible if ANY assigned day is visible
 }
 
-/* ===================================================
-   POI VISIBILITY
-=================================================== */
+/** Apply marker layer state for every POI (call after any visibility change) */
+function applyAllMarkerVisibility(){
+  S.pois.forEach(p=>{
+    const show=(S.fcat==='all'||p.cat===S.fcat) && poiEffectivelyVisible(p);
+    try{ show?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){}
+  });
+  // Also show/hide route polylines
+  S.routes.forEach(r=>{
+    if(!r.poly) return;
+    const hidden=r.dayId && isDayHidden(r.dayId);
+    try{ hidden?map.removeLayer(r.poly):map.addLayer(r.poly); }catch(e){}
+  });
+}
+
+/* --- Day visibility --- */
+function setDayVisibility(did, visible){
+  if(visible) delete S.dayVisibility[did];
+  else S.dayVisibility[did]=false;
+  applyAllMarkerVisibility();
+  renderPOIs();     // refreshes list icons + opacity
+  renderDays();     // refreshes day card eye icon
+  renderDayOrderLines();
+  scheduleZoneRefresh();
+}
+function setAllDaysVisibility(visible){
+  S.days.forEach(d=>{ if(visible) delete S.dayVisibility[d.id]; else S.dayVisibility[d.id]=false; });
+  applyAllMarkerVisibility();
+  renderPOIs();
+  renderDays();
+  renderDayOrderLines();
+  scheduleZoneRefresh();
+}
+
+/* --- Individual POI visibility --- */
 function isPOIHidden(pid){ return S.poiVisibility[pid]===false; }
 function setPOIVisibility(pid, visible){
   if(visible) delete S.poiVisibility[pid];
   else S.poiVisibility[pid]=false;
-  const p=S.pois.find(x=>x.id===pid);
-  if(p&&p.marker){ try{ visible?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){} }
-  renderPOIs(); // re-render list so eye icon updates
+  applyAllMarkerVisibility();
+  renderPOIs();
   renderDayOrderLines();
   scheduleZoneRefresh();
 }
 function setAllPOIsVisibility(visible){
-  S.pois.forEach(p=>{ if(visible) delete S.poiVisibility[p.id]; else S.poiVisibility[p.id]=false; try{ visible?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){} });
-  renderPOIs(); renderDayOrderLines(); scheduleZoneRefresh();
+  S.pois.forEach(p=>{ if(visible) delete S.poiVisibility[p.id]; else S.poiVisibility[p.id]=false; });
+  applyAllMarkerVisibility();
+  renderPOIs();
+  renderDayOrderLines();
+  scheduleZoneRefresh();
 }
 function interpolateCoords(coords, fraction){
   const totalLen = coords.reduce((acc,_,i)=>{ if(!i) return acc; return acc+L.latLng(coords[i-1]).distanceTo(L.latLng(coords[i])); },0);
@@ -744,24 +783,23 @@ function renderPOIs(){
     .slice()
     .sort((a,b)=>a.name.localeCompare(b.name,'fr',{sensitivity:'base'}));
 
-  // Determine map marker visibility for every POI:
-  // Hidden if: (a) individually hidden, OR (b) ALL assigned days are hidden (not "any")
-  S.pois.forEach(p=>{
-    const catMatch=(S.fcat==='all'||p.cat===S.fcat);
-    const poiHidden=isPOIHidden(p.id);
-    const dayHidden=(p.dayIds||[]).length>0 && (p.dayIds||[]).every(did=>isDayHidden(did));
-    const show=catMatch && !poiHidden && !dayHidden;
-    try{ show?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){}
-  });
+  // Apply marker visibility for ALL pois (not just filtered)
+  applyAllMarkerVisibility();
 
   if(!vis.length){ el.innerHTML='<div style="font-size:.73rem;color:var(--muted);">No POIs'+(S.fcat!=='all'?' in this category':'')+'.</div>'; return; }
 
   el.innerHTML=vis.map(p=>{
-    const hidden=isPOIHidden(p.id);
-    const dayBadges=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); if(!d) return''; const di=S.days.indexOf(d); const c=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length]; return'<span class="pday-badge" style="background:'+c+';">'+esc(d.title)+'</span>'; }).join('');
+    const individuallyHidden = isPOIHidden(p.id);
+    const effectivelyHidden  = !poiEffectivelyVisible(p);
+    // Day-forced visibility hint (show which days are hiding this POI)
+    const hiddenByDays = !individuallyHidden && effectivelyHidden;
+    const dayBadges=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); if(!d) return''; const di=S.days.indexOf(d); const c=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length]; const dimmed=isDayHidden(did); return'<span class="pday-badge" style="background:'+c+';'+(dimmed?'opacity:.4;':'')+'">'+esc(d.title)+'</span>'; }).join('');
     const eff=poiEffectiveCost(p);
     const costStr = p.costType==='perday' && (p.dayIds||[]).length>1 ? '$'+p.cost+'/day':'';
-    return '<div class="poic" data-pid="'+p.id+'" onclick="focusPOI('+p.id+')" style="'+(hidden?'opacity:.45;':'')+'}">'
+    // Eye icon: shows individual state; if dimmed by day, show a different hint
+    const eyeIcon  = individuallyHidden ? '👁‍🗨' : '👁';
+    const eyeTitle = individuallyHidden ? 'Show POI' : (hiddenByDays ? 'Hidden by day — click to force show' : 'Hide POI');
+    return '<div class="poic" data-pid="'+p.id+'" onclick="focusPOI('+p.id+')" style="'+(effectivelyHidden?'opacity:.4;':'')+'}">'
       +'<div class="ppin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
       +'<div class="pbody"><div class="pname">'+esc(p.name)+(p.locked?' 🔒':'')+'</div>'
       +'<div class="pmeta">'+(p.rating?'<span>'+'★'.repeat(+p.rating)+'</span>':'')+'</div>'
@@ -770,7 +808,7 @@ function renderPOIs(){
       +(p.tags&&p.tags.length?'<div class="ptags">'+p.tags.slice(0,3).map(t=>'<span class="tag">'+esc(t)+'</span>').join('')+'</div>':'')
       +'<div class="poi-photos" data-phid="'+p.id+'"></div></div>'
       +'<div class="pacts">'
-      +'<button class="btn bg bic" onclick="event.stopPropagation();setPOIVisibility('+p.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show':'Hide')+'" style="font-size:.8rem;">'+(hidden?'👁‍🗨':'👁')+'</button>'
+      +'<button class="btn bg bic" onclick="event.stopPropagation();setPOIVisibility('+p.id+','+(individuallyHidden?'true':'false')+')" title="'+eyeTitle+'" style="font-size:.8rem;">'+eyeIcon+'</button>'
       +'<button class="btn bg bic" onclick="event.stopPropagation();editPOI('+p.id+')">✏️</button>'
       +'<button class="btn br bic" onclick="event.stopPropagation();delPOI('+p.id+')">🗑</button></div></div>';
   }).join('');
