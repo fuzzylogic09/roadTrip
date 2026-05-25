@@ -369,7 +369,8 @@ body.drawer-pinned #gbadge{left:calc(var(--pw) + 50%);transform:translateX(-50%)
 .route-hour-dot{width:9px;height:9px;border-radius:50%;border:2px solid rgba(255,255,255,.9);box-shadow:0 1px 4px rgba(0,0,0,.25);}
 
 /* Day zone overlay SVG */
-#day-zone-svg{position:fixed;inset:0;pointer-events:none;z-index:50;}
+/* Day zone overlay — lives inside the map container (see index.html), uses Leaflet stacking context */
+#day-zone-svg{position:absolute;top:0;left:0;pointer-events:none;z-index:250;overflow:visible;}
 
 /* Keyframes */
 @keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}
