@@ -105,13 +105,17 @@ function geoEllipseAsPixels(cLat, cLng, aMet, bMet, angleMet, cosLat, N=64){
 }
 
 // Wobble in pixels after projection (small, hand-drawn feel)
+// Displacement is zero-mean so the ellipse centroid doesn't shift.
 function wobbleEllipse(pts, seed){
   let r=seed*9301+49297;
-  return pts.map(([x,y])=>{
-    r=(r*9301+49297)%233280; const rx=(r/233280-.5)*6;
-    r=(r*9301+49297)%233280; const ry=(r/233280-.5)*6;
-    return [x+rx, y+ry];
+  const disp=pts.map(()=>{
+    r=(r*9301+49297)%233280; const dx=(r/233280-.5)*6;
+    r=(r*9301+49297)%233280; const dy=(r/233280-.5)*6;
+    return [dx,dy];
   });
+  const mx=disp.reduce((s,d)=>s+d[0],0)/disp.length;
+  const my=disp.reduce((s,d)=>s+d[1],0)/disp.length;
+  return pts.map(([x,y],i)=>[x+disp[i][0]-mx, y+disp[i][1]-my]);
 }
 
 // Convert point array → smooth SVG path (1 Chaikin pass, very gentle)
@@ -140,18 +144,13 @@ const ELLIPSE_EXTRA_METRES = 400;  // extra per retry if POI falls outside
 
 /**
  * Build day-zone path.
- * Key design:
- *  - Ellipse is FITTED and ORIENTED using ONLY poiGeoPts (the POIs).
- *    This ensures the major axis aligns with the POI distribution, not route wiggles.
- *  - allGeoPts (POIs + route samples) are used ONLY in the containment check,
- *    so the ellipse also covers the route path if needed (may expand on retry).
- *  - Everything is done in metre-space for correct orientation.
+ *  fitGeoPts     — POIs + route endpoints + route samples → drives PCA orientation & size
+ *  mustContainPts — POIs + route endpoints only → guaranteed inside after retry
  */
-function buildDayPath(allGeoPts, poiGeoPts, seed){
-  if(!allGeoPts.length) return '';
+function buildDayPath(fitGeoPts, mustContainPts, seed){
+  if(!mustContainPts.length) return '';
 
-  // Use POIs for fitting; fall back to all points if no POIs
-  const fitPts = poiGeoPts.length ? poiGeoPts : allGeoPts;
+  const fitPts = fitGeoPts.length ? fitGeoPts : mustContainPts;
 
   // Single point: circle
   if(fitPts.length===1){
@@ -199,9 +198,8 @@ function buildDayPath(allGeoPts, poiGeoPts, seed){
       if(i%2===0){const x=parseFloat(arr[i]),y=parseFloat(arr[i+1]);if(!isNaN(x)&&!isNaN(y))acc.push([x,y]);}return acc;
     },[]);
 
-    // Check only POI pixels must be inside (not every route point)
-    const poiPx=poiGeoPts.map(latlngToPixel);
-    const allIn=poiPx.every(pt=>pointInPolygon(pt,poly));
+    const mustPx=mustContainPts.map(latlngToPixel);
+    const allIn=mustPx.every(pt=>pointInPolygon(pt,poly));
     if(allIn||attempt===3) return pathD;
   }
   return '';
@@ -216,6 +214,7 @@ map.on('zoomstart', ()=>{ if(CFG.showDayZones){ const svg=getZoneSvg(); svg.styl
 map.on('zoom',      ()=>{ if(CFG.showDayZones){ const svg=getZoneSvg(); svg.style.display='none'; } });
 map.on('moveend',   scheduleZoneRefresh);
 map.on('zoomend',   scheduleZoneRefresh);
+map.on('viewreset', scheduleZoneRefresh);
 
 function scheduleZoneRefresh(){
   if(_dzRafId) cancelAnimationFrame(_dzRafId);
@@ -237,17 +236,19 @@ function refreshDayZones(){
   S.days.forEach((d, di) => {
     if(isDayHidden(d.id)) return;
 
-    // poiGeoPts = POIs + route endpoints → drive ellipse fit, MUST be inside
-    // allGeoPts = poiGeoPts + route path samples → used only for screen visibility check
+    // fitGeoPts     = POIs + endpoints + route samples  → drives PCA (shape/orientation)
+    // mustContainPts = POIs + endpoints only            → guaranteed inside (containment check)
+    // allGeoPts     = everything                        → screen visibility culling
     const poiIdsSeen = new Set();
-    const poiGeoPts = [];
-    const allGeoPts = [];
+    const fitGeoPts = [], mustContainPts = [], allGeoPts = [];
+
     d.items.forEach(it => {
       if(it.type==='poi'){
         const p=S.pois.find(x=>x.id===it.id);
         if(p && !poiIdsSeen.has(p.id)){
           poiIdsSeen.add(p.id);
-          poiGeoPts.push([p.lat,p.lng]);
+          fitGeoPts.push([p.lat,p.lng]);
+          mustContainPts.push([p.lat,p.lng]);
           allGeoPts.push([p.lat,p.lng]);
         }
       }
@@ -259,21 +260,25 @@ function refreshDayZones(){
               const ep=S.pois.find(x=>x.id===pid);
               if(ep){
                 poiIdsSeen.add(pid);
-                poiGeoPts.push([ep.lat,ep.lng]);
+                fitGeoPts.push([ep.lat,ep.lng]);
+                mustContainPts.push([ep.lat,ep.lng]);
                 allGeoPts.push([ep.lat,ep.lng]);
               }
             }
           });
-          // Route samples for screen-visibility check only (don't influence ellipse shape)
+          // Route samples: shape the ellipse via PCA but NOT required inside
           if(r.coords && r.coords.length>1){
-            const step=Math.max(1,Math.floor(r.coords.length/8));
-            for(let i=0;i<r.coords.length;i+=step) allGeoPts.push(r.coords[i]);
-            allGeoPts.push(r.coords[r.coords.length-1]);
+            const n=Math.min(10, r.coords.length);
+            for(let i=0;i<n;i++){
+              const idx=Math.round(i*(r.coords.length-1)/(n-1));
+              fitGeoPts.push(r.coords[idx]);
+              allGeoPts.push(r.coords[idx]);
+            }
           }
         }
       }
     });
-    if(!poiGeoPts.length) return;
+    if(!mustContainPts.length) return;
 
     const margin=600;
     const anyVisible=allGeoPts.some(geo=>{
@@ -287,7 +292,7 @@ function refreshDayZones(){
     const rgba=a=>`rgba(${r2},${g2},${b2},${a})`;
 
     // Build geo-invariant ellipse path
-    const pathD=buildDayPath(allGeoPts, poiGeoPts, di+1);
+    const pathD=buildDayPath(fitGeoPts, mustContainPts, di+1);
     if(!pathD) return;
 
     // Blur filter
@@ -315,8 +320,8 @@ function refreshDayZones(){
 
     // Day title — at the CENTROID of all geo points, projected to pixels
     if(CFG.showZoneTitles){
-      const centLat=poiGeoPts.reduce((s,p)=>s+p[0],0)/poiGeoPts.length;
-      const centLng=poiGeoPts.reduce((s,p)=>s+p[1],0)/poiGeoPts.length;
+      const centLat=mustContainPts.reduce((s,p)=>s+p[0],0)/mustContainPts.length;
+      const centLng=mustContainPts.reduce((s,p)=>s+p[1],0)/mustContainPts.length;
       const [centX,centY]=latlngToPixel([centLat,centLng]);
       const title=(d.title||('Day '+(di+1)))+(d.date?' · '+d.date:'');
       const lbl=document.createElementNS(ns,'text');
