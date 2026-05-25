@@ -102,10 +102,11 @@ const S = {
   costType: 'total',
   dayVisibility: {},  // dayId -> bool (false=hidden)
   dayOrderLines: [],  // Leaflet polyline objects for POI-order lines
-  poiVisibility: {},  // poiId -> bool (false=hidden)
+  poiVisibility: {},  // poiId -> false=hidden, true=force-show, undefined=default
+  allPOIsHidden: false, // global "hide all POIs" flag
 };
 
-const CATS={general:'📍',hotel:'🏨',restaurant:'🍽️',attraction:'🎯',hike:'🥾',view:'🌄',gas:'⛽',parking:'🅿️',info:'ℹ️'};
+const CATS={general:'📍',hotel:'🏨',camping:'⛺',restaurant:'🍽️',attraction:'🎯',hike:'🥾',view:'🌄',gas:'⛽',parking:'🅿️',info:'ℹ️'};
 const RCOL={car:'#1d56d4',foot:'#15803d',bike:'#d4920a',manual:'#9333ea'};
 const MI={car:'🚗',foot:'🚶',bike:'🚲',manual:'✏️'};
 const PC={};
@@ -557,6 +558,7 @@ function renderPoiLabels(){
   poiLabelLayer.clearLayers();
   if(!CFG.showPoiLabels) return;
   S.pois.forEach(p => {
+    if(!poiEffectivelyVisible(p)) return; // skip hidden POIs
     const lbl = L.marker([p.lat, p.lng], {
       icon: L.divIcon({
         className: '',
@@ -608,31 +610,36 @@ function renderDayOrderLines(){
 function isDayHidden(did){ return S.dayVisibility[did]===false; }
 
 /**
- * Effective visibility of a POI on the map — combines both sources:
- *   1. Individual POI toggle (poiVisibility)
- *   2. Day visibility (dayVisibility)
+ * Effective visibility of a POI:
  *
- * Rules:
- *   - If individually hidden → always hidden.
- *   - If individually visible AND has day assignments:
- *       visible when AT LEAST ONE assigned day is visible.
- *   - If individually visible AND has NO day assignments (free POI):
- *       always visible (unaffected by day toggles).
+ *  poiVisibility[id]:
+ *    false     = explicitly hidden (individual button)
+ *    true      = force-shown (overrides global hide)
+ *    undefined = default
+ *
+ *  S.allPOIsHidden: global "hide all" flag
+ *
+ *  Priority:
+ *    1. Individual false  → hidden
+ *    2. Individual true   → shown (even if global hide is on)
+ *    3. Has day assignments:
+ *         At least one day visible → shown (overrides global hide)
+ *         All days hidden          → hidden
+ *    4. Free POI (no days): follows S.allPOIsHidden
  */
 function poiEffectivelyVisible(p){
   if(S.poiVisibility[p.id]===false) return false;
+  if(S.poiVisibility[p.id]===true)  return true;
   const days=p.dayIds||[];
-  if(!days.length) return true;               // free POI — days don't affect it
-  return days.some(did=>!isDayHidden(did));   // visible if ANY assigned day is visible
+  if(days.length) return days.some(did=>!isDayHidden(did));
+  return !S.allPOIsHidden;
 }
 
-/** Apply marker layer state for every POI (call after any visibility change) */
 function applyAllMarkerVisibility(){
   S.pois.forEach(p=>{
     const show=(S.fcat==='all'||p.cat===S.fcat) && poiEffectivelyVisible(p);
     try{ show?map.addLayer(p.marker):map.removeLayer(p.marker); }catch(e){}
   });
-  // Also show/hide route polylines
   S.routes.forEach(r=>{
     if(!r.poly) return;
     const hidden=r.dayId && isDayHidden(r.dayId);
@@ -645,36 +652,28 @@ function setDayVisibility(did, visible){
   if(visible) delete S.dayVisibility[did];
   else S.dayVisibility[did]=false;
   applyAllMarkerVisibility();
-  renderPOIs();     // refreshes list icons + opacity
-  renderDays();     // refreshes day card eye icon
-  renderDayOrderLines();
-  scheduleZoneRefresh();
+  renderPOIs(); renderDays(); renderDayOrderLines(); scheduleZoneRefresh();
 }
 function setAllDaysVisibility(visible){
   S.days.forEach(d=>{ if(visible) delete S.dayVisibility[d.id]; else S.dayVisibility[d.id]=false; });
   applyAllMarkerVisibility();
-  renderPOIs();
-  renderDays();
-  renderDayOrderLines();
-  scheduleZoneRefresh();
+  renderPOIs(); renderDays(); renderDayOrderLines(); scheduleZoneRefresh();
 }
 
 /* --- Individual POI visibility --- */
 function isPOIHidden(pid){ return S.poiVisibility[pid]===false; }
 function setPOIVisibility(pid, visible){
-  if(visible) delete S.poiVisibility[pid];
-  else S.poiVisibility[pid]=false;
+  if(visible) delete S.poiVisibility[pid]; // back to default
+  else        S.poiVisibility[pid]=false;
   applyAllMarkerVisibility();
-  renderPOIs();
-  renderDayOrderLines();
-  scheduleZoneRefresh();
+  renderPOIs(); renderDayOrderLines(); scheduleZoneRefresh();
 }
+
+/* --- Global POI show/hide (separate flag, never pollutes per-POI state) --- */
 function setAllPOIsVisibility(visible){
-  S.pois.forEach(p=>{ if(visible) delete S.poiVisibility[p.id]; else S.poiVisibility[p.id]=false; });
+  S.allPOIsHidden = !visible;
   applyAllMarkerVisibility();
-  renderPOIs();
-  renderDayOrderLines();
-  scheduleZoneRefresh();
+  renderPOIs(); renderDayOrderLines(); scheduleZoneRefresh();
 }
 function interpolateCoords(coords, fraction){
   const totalLen = coords.reduce((acc,_,i)=>{ if(!i) return acc; return acc+L.latLng(coords[i-1]).distanceTo(L.latLng(coords[i])); },0);
@@ -713,7 +712,9 @@ function addPOI(ll, data){
     id, name:data.name||'POI', desc:data.desc||'', cat:data.cat||'general',
     color:data.color||'#c94f14', rating:data.rating||'', links:data.links||[],
     tags:data.tags||[], lat:ll.lat, lng:ll.lng, locked:data.locked!==false,
-    dayIds, cost:+(data.cost||0), costType:data.costType||'total', marker:null
+    dayIds, cost:+(data.cost||0), costType:data.costType||'total',
+    propagateAccom: data.propagateAccom!==false && isAccomCat(data.cat||'general'),
+    marker:null
   };
   const mk = L.marker([p.lat,p.lng],{icon:mkPin(p.color,CATS[p.cat]||'📍'),draggable:false}).addTo(map);
   mk.bindPopup('',{minWidth:195});
@@ -722,6 +723,29 @@ function addPOI(ll, data){
   p.marker = mk; S.pois.push(p);
   dayIds.forEach(did=>syncPD(p,did));
   return p;
+}
+
+// Accommodation categories that propagate to the next day
+function isAccomCat(cat){ return ['hotel','camping'].includes(cat); }
+
+/**
+ * For a given day, return the ghost-propagated accommodation items from the PREVIOUS days:
+ * Any hotel/camping POI assigned to the PREVIOUS day that has propagateAccom=true.
+ * Returns array of {type:'ghost', poiId}.
+ * These appear at position 0 in the day's visual list and cannot be moved above.
+ */
+function getGhostItemsForDay(dayIdx){
+  if(dayIdx===0) return [];
+  const prevDay=S.days[dayIdx-1];
+  if(!prevDay) return [];
+  const ghosts=[];
+  prevDay.items.forEach(it=>{
+    if(it.type==='poi'){
+      const p=S.pois.find(x=>x.id===it.id);
+      if(p&&isAccomCat(p.cat)&&p.propagateAccom) ghosts.push({type:'ghost',poiId:p.id});
+    }
+  });
+  return ghosts;
 }
 function syncPD(p,did){ const d=S.days.find(x=>x.id===did); if(d&&!d.items.some(i=>i.type==='poi'&&i.id===p.id)) d.items.push({type:'poi',id:p.id}); }
 function setPOIDays(p,newDayIds){
@@ -764,6 +788,11 @@ function editPOI(id){
   setCostType(p.costType||'total');
   refMDay(); renderMDayCheckboxes(p.dayIds||[]);
   updateCostTypeUI();
+  // Propagate checkbox — only relevant for accommodation categories
+  const propRow=qs('#m-propagate-row');
+  if(propRow){ propRow.style.display=isAccomCat(p.cat)?'flex':'none'; }
+  const propCb=qs('#m-propagate');
+  if(propCb) propCb.checked=p.propagateAccom!==false;
   qs('#mbk').classList.add('on'); setTimeout(()=>qs('#m-name').focus(),80);
 }
 function delPOI(id){
@@ -876,8 +905,21 @@ function renderDays(){
       if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r){ const tot=routeCost(r),fuel=routeFuel(r); if(tot>0){ const sub=[]; if(fuel>0) sub.push('fuel $'+fuel.toFixed(2)); if(r.fixedCost>0) sub.push('fixed $'+r.fixedCost.toFixed(2)); costRows.push({l:(MI[r.mode]||'🛣️')+' '+r.fromName+'→'+r.toName,c:tot,s:sub.join(' + ')}); } } }
     });
     if(eating>0) costRows.push({l:'🍽️ Eating'+(eatingOverridden?' (custom)':' (default)'),c:eating,s:''});
+    const ghosts=getGhostItemsForDay(di);
     let items='';
-    if(!d.items.length) items='<div class="empty-day">Empty — assign POIs via ✏️ Edit</div>';
+    if(!d.items.length && !ghosts.length) items='<div class="empty-day">Empty — assign POIs via ✏️ Edit</div>';
+
+    // Ghost items (accommodation from previous day) — rendered first, not draggable above
+    ghosts.forEach(g=>{
+      const p=S.pois.find(x=>x.id===g.poiId); if(!p) return;
+      items+='<div class="day-item" style="opacity:.45;background:rgba(0,0,0,.04);border-style:dashed;cursor:default;" title="Starting point (from previous day)">'
+        +'<span style="font-size:.7rem;flex-shrink:0;">🔗</span>'
+        +'<div class="dipin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
+        +'<span class="diname" style="color:var(--muted);">'+esc(p.name)+' <span style="font-size:.58rem;">(carry-over)</span></span>'
+        +'<button class="btn bg bic bsm" onclick="focusPOI('+p.id+')" style="opacity:.6;">👁</button>'
+        +'</div>';
+    });
+    if(ghosts.length) items+='<div style="border-top:1.5px dashed var(--border2);margin:3px 0 4px;"></div>';
     d.items.forEach((it,idx)=>{
       items+='<div class="day-dropzone" data-did="'+d.id+'" data-idx="'+idx+'"></div>';
       if(it.type==='poi'){
@@ -953,6 +995,10 @@ function renderDays(){
 
 function moveItem(fDid,fIdx,itype,iid,tDid,tIdx){
   const fd=S.days.find(d=>d.id===fDid),td=S.days.find(d=>d.id===tDid); if(!fd||!td) return;
+  // Block placing before ghost items in target day
+  const tDayIdx=S.days.indexOf(td);
+  const ghostCount=getGhostItemsForDay(tDayIdx).length;
+  if(tIdx<ghostCount){ toast('Cannot place before the carry-over starting point',''); return; }
   const[item]=fd.items.splice(fIdx,1); if(!item) return;
   if(itype==='poi'){ const p=S.pois.find(x=>x.id===iid); if(p){ p.dayIds=(p.dayIds||[]).filter(x=>x!==fDid); if(!p.dayIds.includes(tDid)) p.dayIds.push(tDid); } }
   if(itype==='route'){ const r=S.routes.find(x=>x.id===iid); if(r) r.dayId=tDid; }
@@ -1092,6 +1138,8 @@ function openModal(ll,name){
     qs('#m-tags').value=''; qs('#m-cost').value='';
     selCol('#c94f14'); renderLinks([]); qs('#m-hd').textContent='New POI'; qs('#m-ico').textContent='📍';
     setCostType('total'); renderMDayCheckboxes([]);
+    const propRow=qs('#m-propagate-row'); if(propRow) propRow.style.display='none';
+    const propCb=qs('#m-propagate'); if(propCb) propCb.checked=true;
   }
   refMDay();
   qs('#mbk').classList.add('on'); setTimeout(()=>qs('#m-name').focus(),80);
@@ -1123,7 +1171,8 @@ function tripData(){
     eatingBudgets:Object.assign({},S.eatingBudgets),
     dayVisibility:Object.assign({},S.dayVisibility),
     poiVisibility:Object.assign({},S.poiVisibility),
-    pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayIds:p.dayIds||[],cost:p.cost||0,costType:p.costType||'total'})),
+    allPOIsHidden:S.allPOIsHidden||false,
+    pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayIds:p.dayIds||[],cost:p.cost||0,costType:p.costType||'total',propagateAccom:p.propagateAccom!==false})),
     routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4'})),
     days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
 }
@@ -1139,8 +1188,9 @@ async function loadData(json){
     if(d.eatingBudgets) Object.assign(S.eatingBudgets, d.eatingBudgets);
     if(d.dayVisibility) Object.assign(S.dayVisibility, d.dayVisibility);
     if(d.poiVisibility) Object.assign(S.poiVisibility, d.poiVisibility);
+    S.allPOIsHidden = !!d.allPOIsHidden;
     (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
-    (d.pois||[]).forEach(p=>{ const dayIds=p.dayIds||(p.dayId?[Number(p.dayId)]:[]); addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayIds:dayIds.map(Number),cost:+(p.cost||0),costType:p.costType||'total'}); });
+    (d.pois||[]).forEach(p=>{ const dayIds=p.dayIds||(p.dayId?[Number(p.dayId)]:[]); addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayIds:dayIds.map(Number),cost:+(p.cost||0),costType:p.costType||'total',propagateAccom:p.propagateAccom!==false}); });
     fillRS('rf','rt','rd');
     const routes=d.routes||[];
     if(routes.length){ toast('Recalculating '+routes.length+' route(s)…','');
@@ -1159,7 +1209,7 @@ function clearAll(s){
   clearLines(); poiLabelLayer.clearLayers();
   S.dayOrderLines.forEach(l=>map.removeLayer(l)); S.dayOrderLines=[];
   S.pois.length=0; S.routes.length=0; S.days.length=0;
-  S.eatingBudgets={}; S.eatingDefault=0; S.dayVisibility={}; S.poiVisibility={};
+  S.eatingBudgets={}; S.eatingDefault=0; S.dayVisibility={}; S.poiVisibility={}; S.allPOIsHidden=false;
   svgEl.innerHTML=''; ra(); if(!s) toast('Cleared','ok');
 }
 function expGPX(){ const w=S.pois.map(p=>'  <wpt lat="'+p.lat+'" lon="'+p.lng+'"><name>'+esc(p.name)+'</name></wpt>').join('\n'); const t=S.routes.map(r=>'  <trk><name>'+esc(r.fromName)+'→'+esc(r.toName)+'</name><trkseg>'+r.coords.map(c=>'<trkpt lat="'+c[0]+'" lon="'+c[1]+'"></trkpt>').join('')+'</trkseg></trk>').join('\n'); const b=new Blob(['<?xml version="1.0"?>\n<gpx version="1.1">\n'+w+'\n'+t+'\n</gpx>'],{type:'application/gpx+xml'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='roadtrip.gpx'; a.click(); toast('GPX exported','ok'); }
@@ -1205,7 +1255,11 @@ qs('#btn-new').addEventListener('click',()=>{ S.pendLL=map.getCenter(); openModa
 qs('#btn-addd').addEventListener('click',addDay);
 qs('#m-cancel').addEventListener('click',closeModal);
 qs('#mbk').addEventListener('click',ev=>{ if(ev.target===ev.currentTarget) closeModal(); });
-qs('#m-cat').addEventListener('change',ev=>{ qs('#m-ico').textContent=CATS[ev.target.value]||'📍'; });
+qs('#m-cat').addEventListener('change',ev=>{
+  qs('#m-ico').textContent=CATS[ev.target.value]||'📍';
+  const propRow=qs('#m-propagate-row');
+  if(propRow) propRow.style.display=isAccomCat(ev.target.value)?'flex':'none';
+});
 qsa('.csw').forEach(s=>s.addEventListener('click',()=>selCol(s.dataset.c)));
 qs('#btn-alink').addEventListener('click',()=>{ const el=qs('#m-links'); const row=document.createElement('div'); row.className='lrow'; row.innerHTML='<input class="inp" style="width:76px;flex-shrink:0;" placeholder="Label"><input class="inp" style="flex:1;" placeholder="https://..."><button class="btn br bic bsm" onclick="this.parentNode.remove()">✕</button>'; el.appendChild(row); });
 // Cost type computed update on cost input
@@ -1213,8 +1267,10 @@ qs('#m-cost').addEventListener('input', updateCostTypeUI);
 qs('#m-save').addEventListener('click',()=>{
   const name=qs('#m-name').value.trim(); if(!name){ qs('#m-name').focus(); toast('Please enter a name','err'); return; }
   const newDayIds=getSelectedDayIds();
-  const data={name,desc:qs('#m-desc').value,cat:qs('#m-cat').value,rating:qs('#m-rat').value,tags:qs('#m-tags').value.split(',').map(t=>t.trim()).filter(Boolean),links:getLinks(),color:S.col,dayIds:newDayIds,cost:+(qs('#m-cost').value||0),costType:S.costType};
-  if(S.editing){ const p=S.pois.find(x=>x.id===S.editing); if(p){ p.name=data.name; p.desc=data.desc; p.cat=data.cat; p.rating=data.rating; p.tags=data.tags; p.links=data.links; p.color=data.color; p.cost=data.cost; p.costType=data.costType; p.marker.setIcon(mkPin(p.color,CATS[p.cat]||'📍')); setPOIDays(p,newDayIds); toast('POI updated','ok'); } }
+  const propCb=qs('#m-propagate');
+  const propagateAccom=propCb?propCb.checked:false;
+  const data={name,desc:qs('#m-desc').value,cat:qs('#m-cat').value,rating:qs('#m-rat').value,tags:qs('#m-tags').value.split(',').map(t=>t.trim()).filter(Boolean),links:getLinks(),color:S.col,dayIds:newDayIds,cost:+(qs('#m-cost').value||0),costType:S.costType,propagateAccom};
+  if(S.editing){ const p=S.pois.find(x=>x.id===S.editing); if(p){ p.name=data.name; p.desc=data.desc; p.cat=data.cat; p.rating=data.rating; p.tags=data.tags; p.links=data.links; p.color=data.color; p.cost=data.cost; p.costType=data.costType; p.propagateAccom=data.propagateAccom; p.marker.setIcon(mkPin(p.color,CATS[p.cat]||'📍')); setPOIDays(p,newDayIds); toast('POI updated','ok'); } }
   else{ if(!S.pendLL){ closeModal(); return; } addPOI(S.pendLL,data); map.flyTo([S.pendLL.lat,S.pendLL.lng],Math.max(map.getZoom(),14)); toast('POI added!','ok'); }
   closeModal(); qs('#psrch').value=''; ra();
 });
