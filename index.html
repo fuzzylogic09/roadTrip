@@ -112,9 +112,11 @@
 
   <!-- ── Days ── -->
   <div class="panel" id="panel-days">
-    <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:5px;">
+    <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:5px;align-items:center;">
       <button class="btn ba bsm" id="btn-addd" style="flex:1;">+ Add Day</button>
       <button class="btn bg bsm" id="btn-shift-dates">&#x1F4C5; Shift dates</button>
+      <button class="btn bg bic bsm" id="btn-days-show-all" onclick="setAllDaysVisibility(true)" title="Show all days" style="font-size:.85rem;">👁</button>
+      <button class="btn bg bic bsm" id="btn-days-hide-all" onclick="setAllDaysVisibility(false)" title="Hide all days" style="font-size:.85rem;">👁‍🗨</button>
     </div>
     <div class="pbd" id="day-list"></div>
   </div>
@@ -282,6 +284,10 @@
       <div class="tog-row">
         <div><div class="tog-label">🕐 Hourly distance dots</div><div class="tog-sub">Small dot every 1 hr along routes</div></div>
         <button class="tog on" id="stog-hour-dots" onclick="setSetting('showHourDots',!CFG.showHourDots)"></button>
+      </div>
+      <div class="tog-row">
+        <div><div class="tog-label">🔢 Day POI order lines</div><div class="tog-sub">Straight lines joining POIs in day order</div></div>
+        <button class="tog" id="stog-day-order-lines" onclick="setSetting('showDayOrderLines',!CFG.showDayOrderLines)"></button>
       </div>
 
       <div class="sec"><span>Display</span><span class="sl"></span></div>
