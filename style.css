@@ -345,7 +345,7 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 body.drawer-pinned #drawer-backdrop{display:none!important;}
 body.drawer-pinned #map{left:var(--pw);transition:left .28s;}
 body.drawer-pinned #gbadge{left:calc(var(--pw) + 50%);transform:translateX(-50%);}
-body.drawer-pinned .leaflet-top.leaflet-left{left:var(--pw);}
+/* Pinned drawer: map container shifts, so Leaflet controls shift automatically — no override needed */
 @media(max-width:768px){
   body.drawer-pinned #map{left:0;}
   body.drawer-pinned #drawer-backdrop{display:block!important;}
