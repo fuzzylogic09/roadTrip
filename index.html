@@ -329,6 +329,7 @@
     <div><label class="lbl">Category</label>
       <select class="inp" id="m-cat">
         <option value="general">📍 General</option><option value="hotel">🏨 Hotel</option>
+        <option value="camping">⛺ Camping</option>
         <option value="restaurant">🍽️ Restaurant</option><option value="attraction">🎯 Attraction</option>
         <option value="hike">🥾 Hike</option><option value="view">🌄 Viewpoint</option>
         <option value="gas">⛽ Gas</option><option value="parking">🅿️ Parking</option>
@@ -341,6 +342,11 @@
         <option value="3">★★★☆☆</option><option value="2">★★☆☆☆</option><option value="1">★☆☆☆☆</option>
       </select>
     </div>
+  </div>
+  <!-- Propagate to next day — shown only for hotel/camping -->
+  <div id="m-propagate-row" class="tog-row" style="display:none;margin-bottom:7px;border-radius:var(--rs);padding:7px 10px;background:rgba(29,86,212,.05);border:1px solid rgba(29,86,212,.15);">
+    <div><div class="tog-label" style="font-size:.68rem;">🔗 Show as start of next day</div><div class="tog-sub">Display this accommodation as a ghost entry at the top of the following day</div></div>
+    <input type="checkbox" id="m-propagate" checked style="accent-color:var(--acc);width:18px;height:18px;cursor:pointer;flex-shrink:0;">
   </div>
   <!-- Cost with per-day / per-total toggle -->
   <div class="fr2">
