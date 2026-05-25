@@ -111,12 +111,15 @@ function openDrawer(){
   document.getElementById('drawer').classList.add('open');
   if(!(drawerPinned && !isMobile())) document.getElementById('drawer-backdrop').classList.add('on');
   document.getElementById('btn-drawer').classList.add('open');
+  setTimeout(()=>{ map.invalidateSize(); scheduleZoneRefresh(); }, 300);
 }
 function closeDrawer(force){
   if(drawerPinned && !isMobile() && force !== true) return;
   document.getElementById('drawer').classList.remove('open');
   document.getElementById('drawer-backdrop').classList.remove('on');
   document.getElementById('btn-drawer').classList.remove('open');
+  // Wait for the CSS slide-out transition (~280ms) then tell Leaflet to reclaim the space
+  setTimeout(()=>{ map.invalidateSize(); scheduleZoneRefresh(); }, 300);
 }
 function toggleDrawer(){ isDrawerOpen() ? closeDrawer(true) : openDrawer(); }
 function closeDrawerMobile(){ if(isMobile() && !drawerPinned) closeDrawer(true); }
@@ -255,25 +258,12 @@ function setDayEating(did, val, manual){
 }
 
 function renderEatingBudgetRows(){
-  const el = qs('#eating-day-rows'); if(!el) return;
-  const defEl = qs('#eating-default'); if(defEl && !defEl.matches(':focus')) defEl.value = S.eatingDefault || '';
-  if(!S.days.length){ el.innerHTML='<div style="font-size:.65rem;color:var(--muted);">Add days first.</div>'; return; }
-  el.innerHTML = S.days.map(d => {
-    const overridden = S.eatingBudgets[d.id] !== undefined && S.eatingBudgets[d.id] !== null;
-    const displayVal = overridden ? S.eatingBudgets[d.id] : '';
-    const placeholder = S.eatingDefault ? '$'+S.eatingDefault+' (default)' : '$0';
-    return `<div class="resto-day-row">
-      <span class="resto-day-label">${esc(d.title)}${d.date?` <span style="color:var(--muted2);font-size:.58rem;">${d.date}</span>`:''}${overridden?` <span style="color:var(--acc);font-size:.58rem;">✎ custom</span>`:''}</span>
-      <input type="number" class="inp resto-day-input" min="0" step="1"
-        placeholder="${placeholder}" value="${displayVal}"
-        data-did="${d.id}"
-        oninput="setDayEating(${d.id}, +this.value, this.value!=='')"
-        onblur="if(this.value===''){setDayEating(${d.id},0,false);this.placeholder='${placeholder}';}"
-      >
-    </div>`;
-  }).join('');
+  // Only sync the default input and the total line — per-day overrides live in the Days tab
+  const defEl = qs('#eating-default');
+  if(defEl && !defEl.matches(':focus')) defEl.value = S.eatingDefault || '';
   const total = +(S.days.reduce((s,d)=>s+eatingForDay(d.id),0)).toFixed(2);
-  const totalEl = qs('#eating-total'); if(totalEl) totalEl.innerHTML='Total eating budget: <b>$'+total.toFixed(2)+'</b>';
+  const totalEl = qs('#eating-total');
+  if(totalEl) totalEl.innerHTML='Total eating budget: <b>$'+total.toFixed(2)+'</b> <span style="font-size:.6rem;color:var(--muted);">('+S.days.length+' days × default + custom overrides)</span>';
 }
 
 /* ===================================================
@@ -285,131 +275,125 @@ function latlngToPixel(ll){
   const rect = map.getContainer().getBoundingClientRect();
   return [pt.x + rect.left, pt.y + rect.top];
 }
-/* --- Geometry helpers --- */
+/* --- Ellipse zone geometry --- */
 
-function convexHull(pts){
-  if(pts.length < 2) return pts;
-  pts = pts.slice().sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
-  const cross=(o,a,b)=>(a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0]);
-  const lower=[],upper=[];
-  for(const p of pts){ while(lower.length>=2&&cross(lower[lower.length-2],lower[lower.length-1],p)<=0)lower.pop(); lower.push(p); }
-  for(let i=pts.length-1;i>=0;i--){ const p=pts[i]; while(upper.length>=2&&cross(upper[upper.length-2],upper[upper.length-1],p)<=0)upper.pop(); upper.push(p); }
-  upper.pop(); lower.pop();
-  return lower.concat(upper);
-}
-
-// Expand hull outward from its centroid by `pad` pixels
-function expandHull(hull, pad){
-  if(hull.length < 1) return hull;
-  const cx=hull.reduce((s,p)=>s+p[0],0)/hull.length;
-  const cy=hull.reduce((s,p)=>s+p[1],0)/hull.length;
-  return hull.map(([x,y])=>{ const dx=x-cx,dy=y-cy,len=Math.sqrt(dx*dx+dy*dy)||1; return [x+dx/len*pad,y+dy/len*pad]; });
-}
-
-// Deduplicate input points closer than `minDist` BEFORE the hull is computed.
-// This is safe because the hull algorithm will naturally skip near-duplicate points,
-// but pre-filtering prevents the degenerate case where two hull edges nearly overlap.
-function deduplicatePts(pts, minDist=8){
-  if(!pts.length) return pts;
-  const out=[pts[0]];
-  for(let i=1;i<pts.length;i++){
-    const prev=out[out.length-1], cur=pts[i];
-    const dx=cur[0]-prev[0], dy=cur[1]-prev[1];
-    if(Math.sqrt(dx*dx+dy*dy) >= minDist) out.push(cur);
+// Fit the minimum bounding ellipse to a set of 2-D points.
+// We use PCA (principal component analysis) to find the orientation, then
+// measure extent along each axis. The resulting ellipse is guaranteed to
+// contain every input point.
+function fitEllipse(pts){
+  const n = pts.length;
+  // Centroid
+  const cx = pts.reduce((s,p)=>s+p[0],0)/n;
+  const cy = pts.reduce((s,p)=>s+p[1],0)/n;
+  // Covariance matrix
+  let sxx=0,sxy=0,syy=0;
+  for(const [x,y] of pts){
+    const dx=x-cx, dy=y-cy;
+    sxx+=dx*dx; sxy+=dx*dy; syy+=dy*dy;
   }
-  return out.length >= 1 ? out : pts;
-}
-
-// Chaikin subdivision — corner-cutting algorithm.
-// Key property: the result is always INSIDE the convex hull of the input polygon.
-// To guarantee containment of original points we must expand BEFORE Chaikin,
-// by enough to absorb the shrinkage.
-// With 3 passes the shape shrinks inward by at most ~(1 - 0.5^3) ≈ 12.5% of the
-// average edge length at each corner — we compensate by expanding generously.
-function chaikinSmooth(pts, passes=3){
-  let p = pts.slice();
-  for(let pass=0;pass<passes;pass++){
-    const n=p.length, next=[];
-    for(let i=0;i<n;i++){
-      const a=p[i], b=p[(i+1)%n];
-      next.push([0.75*a[0]+0.25*b[0], 0.75*a[1]+0.25*b[1]]);
-      next.push([0.25*a[0]+0.75*b[0], 0.25*a[1]+0.75*b[1]]);
-    }
-    p = next;
+  sxx/=n; sxy/=n; syy/=n;
+  // Eigenvalues / eigenvectors of 2×2 symmetric matrix
+  const trace=sxx+syy, det=sxx*syy-sxy*sxy;
+  const disc=Math.sqrt(Math.max(0,trace*trace/4-det));
+  const l1=trace/2+disc, l2=trace/2-disc; // l1 >= l2
+  // Principal axis angle
+  let angle = 0;
+  if(Math.abs(sxy)>1e-9 || Math.abs(sxx-syy)>1e-9){
+    angle = Math.atan2(l1-sxx, sxy); // angle of major axis
   }
-  if(!p.length) return '';
-  return 'M'+p[0][0]+','+p[0][1]+p.slice(1).map(([x,y])=>' L'+x+','+y).join('')+' Z';
+  // Project all points onto the two axes, measure max distance from centroid
+  const cos=Math.cos(angle), sin=Math.sin(angle);
+  let a=0, b=0;
+  for(const [x,y] of pts){
+    const dx=x-cx, dy=y-cy;
+    const u= dx*cos+dy*sin;   // along major axis
+    const v=-dx*sin+dy*cos;   // along minor axis
+    a=Math.max(a,Math.abs(u));
+    b=Math.max(b,Math.abs(v));
+  }
+  return {cx,cy,a,b,angle};
 }
 
-// Add a small per-vertex wobble for the hand-drawn feel
-function wobble(pts, seed){
-  let r = seed*9301+49297;
+// Generate N points around an ellipse (cx,cy,a,b,angle) as [x,y] array
+function ellipsePoints(cx,cy,a,b,angle,N=64){
+  const pts=[];
+  const cos=Math.cos(angle), sin=Math.sin(angle);
+  for(let i=0;i<N;i++){
+    const t=2*Math.PI*i/N;
+    const u=a*Math.cos(t), v=b*Math.sin(t);
+    pts.push([cx+u*cos-v*sin, cy+u*sin+v*cos]);
+  }
+  return pts;
+}
+
+// Add a subtle per-vertex wobble for the hand-drawn feel
+// (smaller amplitude than before — ellipse is already smooth)
+function wobbleEllipse(pts, seed){
+  let r=seed*9301+49297;
   return pts.map(([x,y])=>{
-    r=(r*9301+49297)%233280; const rx=(r/233280-.5)*10;
-    r=(r*9301+49297)%233280; const ry=(r/233280-.5)*10;
+    r=(r*9301+49297)%233280; const rx=(r/233280-.5)*8;
+    r=(r*9301+49297)%233280; const ry=(r/233280-.5)*8;
     return [x+rx, y+ry];
   });
 }
 
-// Check whether a 2-D point is inside a closed polygon (ray-casting)
+// Convert a wobbled point array to a smooth SVG path via Chaikin (1 pass — gentle)
+function ellipseToPath(pts){
+  // 1 pass of Chaikin to soften the wobble without shrinking much
+  const n=pts.length, s=[];
+  for(let i=0;i<n;i++){
+    const a=pts[i], b=pts[(i+1)%n];
+    s.push([0.75*a[0]+0.25*b[0], 0.75*a[1]+0.25*b[1]]);
+    s.push([0.25*a[0]+0.75*b[0], 0.25*a[1]+0.75*b[1]]);
+  }
+  return 'M'+s[0][0]+','+s[0][1]+s.slice(1).map(([x,y])=>' L'+x+','+y).join('')+' Z';
+}
+
+// Check whether a point is inside a polygon (ray-casting)
 function pointInPolygon([px,py], poly){
   let inside=false;
   for(let i=0,j=poly.length-1;i<poly.length;j=i++){
     const [xi,yi]=poly[i],[xj,yj]=poly[j];
-    if(((yi>py)!==(yj>py)) && (px < (xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
   }
   return inside;
 }
 
-// Decode a flat SVG polyline path back into a point array (for the containment check)
-function pathToPoints(d){
-  const coords=[];
-  const parts=d.replace(/[MLZ]/g,' ').trim().split(/\s+/);
-  for(let i=0;i<parts.length-1;i+=2){
-    const x=parseFloat(parts[i]),y=parseFloat(parts[i+1]);
-    if(!isNaN(x)&&!isNaN(y)) coords.push([x,y]);
-  }
-  return coords;
-}
-
-// Build the day-zone path ensuring all poiPx are contained.
-// Strategy:
-//   1. Deduplicate input points
-//   2. Convex hull
-//   3. Expand by BASE_PAD (generous, compensates for Chaikin shrinkage + wobble)
-//   4. Wobble
-//   5. Chaikin smooth
-//   6. Verify every original POI pixel is inside; if any are outside, expand the
-//      hull more and redo (max 3 iterations)
-const BASE_PAD = 90;   // generous base expansion in pixels
-const EXTRA_PAD = 40;  // extra expansion per retry iteration
+// Build the day-zone ellipse path ensuring all POI pixels are contained.
+// Returns an SVG path string.
+const ELLIPSE_PAD = 55;   // base padding in pixels around the fitted ellipse
+const ELLIPSE_EXTRA = 30; // extra per retry if a POI slips outside
 
 function buildDayPath(visPx, poiPx, seed){
+  if(visPx.length === 0) return '';
+
   if(visPx.length === 1){
+    // Single point: circle
     const [cx,cy]=visPx[0];
-    return `M${cx-70},${cy} a70,70 0 1,0 140,0 a70,70 0 1,0 -140,0`;
-  }
-  if(visPx.length === 2){
-    const [ax,ay]=visPx[0],[bx,by]=visPx[1];
-    const mx=(ax+bx)/2,my=(ay+by)/2;
-    visPx=[[ax,ay],[mx-25,my+25],[bx,by],[mx+25,my-25]];
+    const r=ELLIPSE_PAD+20;
+    return `M${cx-r},${cy} a${r},${r} 0 1,0 ${r*2},0 a${r},${r} 0 1,0 -${r*2},0`;
   }
 
-  // Deduplicate before hull (prevents near-collinear spike artefacts)
-  const cleaned = deduplicatePts(visPx, 6);
-  const rawHull = convexHull(cleaned.length >= 3 ? cleaned : visPx);
+  // Fit ellipse to all visible points
+  const {cx,cy,a: rawA, b: rawB, angle} = fitEllipse(visPx);
 
   for(let attempt=0; attempt<4; attempt++){
-    const pad = BASE_PAD + attempt * EXTRA_PAD;
-    let hull = expandHull(rawHull, pad);
-    hull = wobble(hull, seed);
-    const pathD = chaikinSmooth(hull, 3);
+    const pad = ELLIPSE_PAD + attempt*ELLIPSE_EXTRA;
+    const a = Math.max(rawA + pad, pad); // semi-major
+    const b = Math.max(rawB + pad, pad); // semi-minor
 
-    // Check all original POI pixels are inside
-    const poly = pathToPoints(pathD);
-    const allIn = poiPx.every(pt => pointInPolygon(pt, poly));
-    if(allIn || attempt === 3) return pathD;
-    // else try again with more padding
+    // Generate perimeter, wobble, smooth
+    const perim = ellipsePoints(cx,cy,a,b,angle,60);
+    const wobbled = wobbleEllipse(perim, seed);
+    const pathD = ellipseToPath(wobbled);
+
+    // Verify all POI pixels are inside
+    const poly = pathD.replace(/[MLZ]/g,' ').trim().split(/\s+/).reduce((acc,_,i,arr)=>{
+      if(i%2===0){ const x=parseFloat(arr[i]),y=parseFloat(arr[i+1]); if(!isNaN(x)&&!isNaN(y)) acc.push([x,y]); } return acc;
+    },[]);
+    const allIn = poiPx.every(pt=>pointInPolygon(pt,poly));
+    if(allIn || attempt===3) return pathD;
   }
   return '';
 }
@@ -418,11 +402,13 @@ function buildDayPath(visPx, poiPx, seed){
 let _dzRafId = null;
 let _dzPending = false;
 
-// During active map drag: just hide the SVG for zero lag
-map.on('movestart', ()=>{ if(CFG.showDayZones){ svgEl.style.display='none'; } });
-map.on('move',      ()=>{ if(CFG.showDayZones){ svgEl.style.display='none'; } });
-map.on('moveend',   ()=>{ scheduleZoneRefresh(); });
-map.on('zoomend',   ()=>{ scheduleZoneRefresh(); });
+// Hide SVG during any map motion (pan or zoom) for zero-lag, redraw after
+map.on('movestart', ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
+map.on('move',      ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
+map.on('zoomstart', ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
+map.on('zoom',      ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
+map.on('moveend',   scheduleZoneRefresh);
+map.on('zoomend',   scheduleZoneRefresh);
 
 function scheduleZoneRefresh(){
   if(_dzRafId) cancelAnimationFrame(_dzRafId);
