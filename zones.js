@@ -1,10 +1,32 @@
 /* ===================================================
-   DAY ZONE OVERLAY
+   DAY ZONE OVERLAY  — rendered inside a Leaflet custom pane
+   Pane z-index 250 = above tiles(200), below overlays(400), markers(600), popups(700)
 =================================================== */
+
+// Create a dedicated Leaflet pane for day zones
+map.createPane('dayZonePane');
+map.getPane('dayZonePane').style.zIndex = 250;
+map.getPane('dayZonePane').style.pointerEvents = 'none';
+
+// We'll draw into a single <svg> element appended to the pane
+let _zoneSvg = null;
+function getZoneSvg(){
+  if(!_zoneSvg){
+    _zoneSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    _zoneSvg.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;overflow:visible;pointer-events:none;';
+    map.getPane('dayZonePane').appendChild(_zoneSvg);
+  }
+  return _zoneSvg;
+}
+
+// latlngToPixel: use Leaflet's layerPointToContainerPoint so coords are
+// relative to the pane's top-left (which tracks map pan automatically
+// via Leaflet's CSS translate on the pane).
+// We use layerPoint so the SVG moves with the map without needing a full redraw on pan.
+// On moveend/zoomend we do a full redraw anyway.
 function latlngToPixel(ll){
-  // SVG is position:absolute inside #map, so container point = SVG point directly
-  const pt = map.latLngToContainerPoint(L.latLng(ll[0], ll[1]));
-  return [pt.x, pt.y];
+  const lp = map.latLngToLayerPoint(L.latLng(ll[0], ll[1]));
+  return [lp.x, lp.y];
 }
 
 /* --- Ellipse zone geometry --- */
@@ -181,14 +203,13 @@ function buildDayPath(allGeoPts, poiGeoPts, seed){
   return '';
 }
 
-/* --- Debounced rAF-based zone refresh --- */
+/* --- Debounced rAF zone refresh --- */
 let _dzRafId = null;
 
-// Hide SVG during any map motion (pan or zoom) for zero-lag, redraw after
-map.on('movestart', ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
-map.on('move',      ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
-map.on('zoomstart', ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
-map.on('zoom',      ()=>{ if(CFG.showDayZones) svgEl.style.display='none'; });
+map.on('movestart', ()=>{ if(CFG.showDayZones){ const svg=getZoneSvg(); svg.style.display='none'; } });
+map.on('move',      ()=>{ if(CFG.showDayZones){ const svg=getZoneSvg(); svg.style.display='none'; } });
+map.on('zoomstart', ()=>{ if(CFG.showDayZones){ const svg=getZoneSvg(); svg.style.display='none'; } });
+map.on('zoom',      ()=>{ if(CFG.showDayZones){ const svg=getZoneSvg(); svg.style.display='none'; } });
 map.on('moveend',   scheduleZoneRefresh);
 map.on('zoomend',   scheduleZoneRefresh);
 
@@ -196,19 +217,18 @@ function scheduleZoneRefresh(){
   if(_dzRafId) cancelAnimationFrame(_dzRafId);
   _dzRafId = requestAnimationFrame(()=>{
     _dzRafId = null;
-    svgEl.style.display='';
+    const svg=getZoneSvg(); svg.style.display='';
     refreshDayZones();
   });
 }
 
 function refreshDayZones(){
-  if(!CFG.showDayZones){ svgEl.innerHTML=''; return; }
+  const svgEl = getZoneSvg();
+  svgEl.innerHTML = '';
+  if(!CFG.showDayZones) return;
   const ns = 'http://www.w3.org/2000/svg';
   const container = map.getContainer();
   const W = container.clientWidth, H = container.clientHeight;
-  svgEl.setAttribute('width', W); svgEl.setAttribute('height', H);
-  svgEl.setAttribute('viewBox', '0 0 '+W+' '+H);
-  svgEl.innerHTML = '';
 
   S.days.forEach((d, di) => {
     if(isDayHidden(d.id)) return;
