@@ -116,17 +116,6 @@ function togglePin(){
   applySettings();
 }
 
-/* ===== SHIFT DATES ===== */
-function openShiftModal(){ var first=S.days.find(function(d){return d.date;}); if(first) qs('#shift-start').value=first.date; qs('#shift-delta').value=''; var el=qs('#shift-preview'); el.style.display='none'; el._delta=0; qs('#shiftmbk').style.display='flex'; }
-function calcShiftDelta(){ var startVal=qs('#shift-start').value; var deltaVal=parseInt(qs('#shift-delta').value)||0; if(startVal&&!deltaVal){ var first=S.days.find(function(d){return d.date;}); if(first) return Math.round((new Date(startVal)-new Date(first.date))/86400000); } return deltaVal; }
-function previewShift(){ var delta=calcShiftDelta(); var el=qs('#shift-preview'); if(!delta){ el.style.display='none'; return; } el._delta=delta; el.innerHTML=S.days.map(function(d,i){ if(!d.date) return(i+1)+'. '+esc(d.title)+': <span style="color:var(--muted)">no date</span>'; var dt=new Date(d.date); dt.setDate(dt.getDate()+delta); return(i+1)+'. '+esc(d.title)+': <span style="color:var(--muted)">'+d.date+'</span> &rarr; <b style="color:var(--acc)">'+dt.toISOString().slice(0,10)+'</b>'; }).join('<br>'); el.style.display='block'; }
-function applyShift(){ var el=qs('#shift-preview'); var delta=el._delta||calcShiftDelta(); if(!delta){ toast('Enter a delta or new start date','err'); return; } S.days.forEach(function(d){ if(!d.date) return; var dt=new Date(d.date); dt.setDate(dt.getDate()+delta); d.date=dt.toISOString().slice(0,10); }); qs('#shiftmbk').style.display='none'; ra(); toast('Dates shifted '+(delta>0?'+':'')+delta+' days','ok'); }
-qs('#shift-cancel').addEventListener('click',function(){ qs('#shiftmbk').style.display='none'; });
-qs('#shiftmbk').addEventListener('click',function(ev){ if(ev.target===ev.currentTarget) qs('#shiftmbk').style.display='none'; });
-qs('#shift-preview-btn').addEventListener('click',previewShift); qs('#shift-apply').addEventListener('click',applyShift);
-qs('#shift-start').addEventListener('change',previewShift); qs('#shift-delta').addEventListener('input',previewShift);
-qs('#btn-shift-dates').addEventListener('click',openShiftModal);
-
 /* ===== SPLIT ROUTE ===== */
 var splitRouteId=null, splitMapLL=null, splitPickingMap=false;
 function openSplitModal(rid){ splitRouteId=rid; splitMapLL=null; splitPickingMap=false; var r=S.routes.find(function(x){return x.id===rid;}); if(!r) return; qs('#split-desc').textContent='Split "'+r.fromName+' to '+r.toName+'" via a mid-point POI.'; qs('#split-poi').innerHTML='<option value="">Select a POI</option>'+S.pois.filter(function(p){return p.id!==r.fromId&&p.id!==r.toId;}).map(function(p){return'<option value="'+p.id+'">'+(CATS[p.cat]||'X')+' '+esc(p.name)+'</option>';}).join(''); qs('#split-poi-name').value='Waypoint'; qs('#split-map-pt').style.display='none'; qs('#smbk').style.display='flex'; }

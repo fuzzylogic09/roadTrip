@@ -1,7 +1,7 @@
 /* =========================================================
-   RoadTrip Planner — app.js  v8.10.1
+   RoadTrip Planner — app.js  v8.10.2
    ========================================================= */
-const APP_VERSION = '8.10.1';
+const APP_VERSION = '8.10.2';
 const GOOGLE_CLIENT_ID = '940235006674-1mfg6a2qn7hkqu78irn2af34a507i76u.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'RoadTripPlanner';
 
@@ -108,6 +108,7 @@ const S = {
   eatingDefault: 0,
   costType: 'total',
   dayVisibility: {},  // dayId -> bool (false=hidden)
+  dayCollapsed: {},   // dayId -> bool (true=collapsed)
   dayOrderLines: [],  // Leaflet polyline objects for POI-order lines
   poiVisibility: {},  // poiId -> false=hidden, true=force-show, undefined=default
   allPOIsHidden: false, // global "hide all POIs" flag

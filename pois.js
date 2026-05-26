@@ -193,22 +193,44 @@ function insertDayAt(idx){
 function updDay(id,k,v){
   const d=S.days.find(x=>x.id===id); if(!d) return;
   if(k==='date'){
-    if(d.date && v){
-      // Cascade the date shift to all subsequent days that have a date
-      try{
-        const delta=Math.round((new Date(v)-new Date(d.date))/86400000);
-        if(delta!==0){
-          const idx=S.days.indexOf(d);
-          for(let i=idx+1;i<S.days.length;i++){
-            if(S.days[i].date){ try{ const dt=new Date(S.days[i].date); dt.setDate(dt.getDate()+delta); S.days[i].date=dt.toISOString().slice(0,10); }catch(e){} }
+    const idx=S.days.indexOf(d);
+    if(v){
+      if(d.date){
+        // Shift all subsequent days by the same delta
+        try{
+          const delta=Math.round((new Date(v)-new Date(d.date))/86400000);
+          if(delta!==0) for(let i=idx+1;i<S.days.length;i++){
+            try{ const dt=new Date(S.days[i].date||v); dt.setDate(dt.getDate()+delta); S.days[i].date=dt.toISOString().slice(0,10); }catch(e){}
           }
+        }catch(e){}
+      } else {
+        // First time setting a date: fill subsequent days consecutively
+        for(let i=idx+1;i<S.days.length;i++){
+          try{ const dt=new Date(v); dt.setDate(dt.getDate()+(i-idx)); S.days[i].date=dt.toISOString().slice(0,10); }catch(e){}
         }
-      }catch(e){}
+      }
     }
     d.date=v;
     ra(); return;
   }
   d[k]=v;
+}
+function toggleDayCollapse(id){
+  S.dayCollapsed[id]=!S.dayCollapsed[id];
+  const card=qs('.dayc[data-dcid="'+id+'"]');
+  if(card){
+    card.classList.toggle('dayc--collapsed',!!S.dayCollapsed[id]);
+    const btn=card.querySelector('.day-collapse-btn');
+    if(btn) btn.textContent=S.dayCollapsed[id]?'▶':'▼';
+  }
+}
+function setAllDaysCollapsed(v){
+  S.days.forEach(d=>{ S.dayCollapsed[d.id]=v; });
+  qsa('.dayc').forEach(card=>{
+    card.classList.toggle('dayc--collapsed',v);
+    const btn=card.querySelector('.day-collapse-btn');
+    if(btn) btn.textContent=v?'▶':'▼';
+  });
 }
 function setDayColor(id, color){
   const d=S.days.find(x=>x.id===id); if(!d) return;
@@ -313,12 +335,16 @@ function renderDays(){
     const zoneColor=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
     const eatPlaceholder=S.eatingDefault?'$'+S.eatingDefault+' (default)':'$0';
     const hidden=isDayHidden(d.id);
-    return '<div class="dayc" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
+    return '<div class="dayc'+(S.dayCollapsed[d.id]?' dayc--collapsed':'')+'" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
       +'<div class="dayh">'
       +'<div class="dayn-bubble" data-did="'+d.id+'" style="background:'+zoneColor+';cursor:pointer;" title="Click to change day color" onclick="qs(\'#dclr-'+d.id+'\').click()">'+(di+1)+'</div>'
       +'<input type="color" id="dclr-'+d.id+'" value="'+zoneColor+'" style="display:none;width:0;height:0;padding:0;border:0;" oninput="setDayColor('+d.id+',this.value)">'
       +'<input class="dayti" value="'+esc(d.title)+'" onchange="updDay('+d.id+',\'title\',this.value)">'
-      +'<input class="daydi" type="date"'+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value)">'
+      +(di===0
+        ?'<input class="daydi" type="date"'+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value)">'
+        :'<span class="daydi-ro">'+(d.date||'')+'</span>'
+      )
+      +'<button class="btn bg bic bsm day-collapse-btn" onclick="toggleDayCollapse('+d.id+')" title="Collapse/expand" style="font-size:.7rem;">'+(S.dayCollapsed[d.id]?'▶':'▼')+'</button>'
       +'<button class="btn bg bic bsm" onclick="setDayVisibility('+d.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show day':'Hide day')+'" style="font-size:.85rem;">'+(hidden?'👁‍🗨':'👁')+'</button>'
       +'<button class="btn br bic bsm" onclick="delDay('+d.id+')">✕</button></div>'
       +'<div class="dayst"><div class="daystat">📍 <b>'+dpois.length+'</b></div>'+(km?'<div class="daystat">🛣️ <b>'+km.toFixed(0)+'km</b></div>':'')+(dur?'<div class="daystat">⏱ <b>'+fmtD(dur)+'</b></div>':'')+(dc?'<div class="daystat gold">💰 <b>$'+dc.toFixed(2)+'</b></div>':'')+'</div>'

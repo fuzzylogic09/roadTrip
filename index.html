@@ -116,9 +116,10 @@
   <div class="panel" id="panel-days">
     <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;gap:5px;align-items:center;">
       <button class="btn ba bsm" id="btn-addd" style="flex:1;">+ Add Day</button>
-      <button class="btn bg bsm" id="btn-shift-dates">&#x1F4C5; Shift dates</button>
       <button class="btn bg bic bsm" id="btn-days-show-all" onclick="setAllDaysVisibility(true)" title="Show all days" style="font-size:.85rem;">👁</button>
       <button class="btn bg bic bsm" id="btn-days-hide-all" onclick="setAllDaysVisibility(false)" title="Hide all days" style="font-size:.85rem;">👁‍🗨</button>
+      <button class="btn bg bic bsm" onclick="setAllDaysCollapsed(false)" title="Expand all days" style="font-size:.75rem;">▼▼</button>
+      <button class="btn bg bic bsm" onclick="setAllDaysCollapsed(true)" title="Collapse all days" style="font-size:.75rem;">▶▶</button>
     </div>
     <div class="pbd" id="day-list"></div>
   </div>
@@ -420,23 +421,6 @@
     </div>
   </div>
   <div class="mfoot"><button class="btn bg" id="re-cancel">Cancel</button><button class="btn bb" id="re-save">Recalculate &amp; Save</button></div>
-</div></div>
-
-<!-- Shift Days Modal -->
-<div id="shiftmbk" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:13px;">
-<div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:18px;width:100%;max-width:380px;box-shadow:var(--sh2);">
-  <h2 style="font-family:var(--head);font-weight:900;font-size:.94rem;margin-bottom:11px;">&#x1F4C5; Shift All Dates</h2>
-  <p style="font-size:.72rem;color:var(--muted);margin-bottom:10px;line-height:1.6;">Move all days forward or backward.</p>
-  <div class="fr2">
-    <div><label class="lbl">New start date</label><input class="inp" type="date" id="shift-start"></div>
-    <div><label class="lbl">Shift by (days)</label><input class="inp" type="number" id="shift-delta" placeholder="+9 or -3"></div>
-  </div>
-  <div id="shift-preview" style="font-size:.67rem;color:var(--muted);margin-bottom:8px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rs);padding:8px;display:none;max-height:140px;overflow-y:auto;line-height:1.8;"></div>
-  <div class="mfoot">
-    <button class="btn bg" id="shift-cancel">Cancel</button>
-    <button class="btn bg" id="shift-preview-btn">Preview</button>
-    <button class="btn ba" id="shift-apply">Apply</button>
-  </div>
 </div></div>
 
 <!-- Split Route Modal -->

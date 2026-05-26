@@ -229,6 +229,9 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .dayti{flex:1;background:transparent;border:none;color:var(--text);font-family:var(--font);font-size:.75rem;font-weight:700;outline:none;}
 .daydi{background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--muted);font-family:var(--font);font-size:.63rem;outline:none;width:88px;text-align:right;}
 .daydi:focus{border-color:var(--acc2);}
+.daydi-ro{color:var(--muted);font-family:var(--font);font-size:.63rem;flex-shrink:0;text-align:right;min-width:72px;}
+.dayc--collapsed .dayst,.dayc--collapsed .dayb{display:none;}
+.dayc--collapsed .dayh{border-bottom:none;}
 .dayst{display:flex;gap:6px;padding:3px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 .daystat{font-size:.62rem;color:var(--muted);display:flex;align-items:center;gap:2px;}
 .daystat b{color:var(--text);font-weight:700;}
