@@ -54,26 +54,10 @@ function fitEllipseGeo(pts, centerPts){
   for(const [x,y] of mpts){ sxx+=x*x; sxy+=x*y; syy+=y*y; }
   sxx/=n; sxy/=n; syy/=n;
   let angleMet=0;
-  if(Math.abs(sxy)>1e-6||Math.abs(sxx-syy)>1e-6) angleMet=Math.atan2(2*sxy, sxx-syy)/2;
+  if(Math.abs(sxy)>1e-6||Math.abs(sxx-syy)>1e-6) angleMet=Math.atan2(2*sxy,sxx-syy)/2;
   const cos=Math.cos(angleMet), sin=Math.sin(angleMet);
   let aMet=0, bMet=0;
-  for(const [x,y] of mpts){
-    const u= x*cos+y*sin;
-    const v=-x*sin+y*cos;
-    aMet=Math.max(aMet,Math.abs(u));
-    bMet=Math.max(bMet,Math.abs(v));
-  }
-  // max|u| and max|v| alone don't guarantee containment: a point at
-  // (0.9·aMet, 0.9·bMet) has ellipse-radius sqrt(0.81+0.81)=1.27 > 1.
-  // Scale both axes uniformly so every point satisfies (u/a)²+(v/b)² ≤ 1.
-  if(aMet>0 && bMet>0){
-    let maxR=0;
-    for(const [x,y] of mpts){
-      const u=x*cos+y*sin, v=-x*sin+y*cos;
-      maxR=Math.max(maxR, Math.sqrt((u/aMet)**2+(v/bMet)**2));
-    }
-    aMet*=maxR; bMet*=maxR;
-  }
+  for(const [x,y] of mpts){ const u=x*cos+y*sin,v=-x*sin+y*cos; aMet=Math.max(aMet,Math.abs(u)); bMet=Math.max(bMet,Math.abs(v)); }
   return {cLat,cLng,aMet,bMet,angleMet,cosLat};
 }
 
@@ -121,16 +105,16 @@ const ELLIPSE_PAD_METRES = 800;
 
 // Build a day-zone ellipse path that contains all pts.
 // pts    = POIs + route endpoints (indices 0..nStop-1) + route path samples (nStop..)
-// nStop  = count of POI/endpoint points (used for centroid; avoids route-sample bias)
+// nStop  = count of POI/endpoint points (used for centroid and PCA)
 function buildDayPath(pts, nStop, seed){
   if(!pts.length) return '';
+  const stopPts=nStop>0 ? pts.slice(0,nStop) : pts;
 
   // Single point → circle
   if(pts.length===1){
     const [lat,lng]=pts[0];
     const cosLat=Math.cos(lat*Math.PI/180)||1;
-    const rLat=ELLIPSE_PAD_METRES/111320;
-    const rLng=ELLIPSE_PAD_METRES/(111320*cosLat);
+    const rLat=ELLIPSE_PAD_METRES/111320, rLng=ELLIPSE_PAD_METRES/(111320*cosLat);
     const circle=[];
     for(let i=0;i<48;i++){
       const t=2*Math.PI*i/48;
@@ -139,14 +123,38 @@ function buildDayPath(pts, nStop, seed){
     return ellipseToPath(wobbleEllipse(circle,seed));
   }
 
-  // Use stop points for centroid, all pts for PCA shape/extents
-  const stopPts=nStop>0 ? pts.slice(0,nStop) : pts;
-  const {cLat,cLng,aMet,bMet,angleMet,cosLat}=fitEllipseGeo(pts, stopPts);
+  // PCA on stop points only → centroid + axis orientation unbiased by route curves
+  const {cLat,cLng,angleMet,cosLat}=fitEllipseGeo(stopPts, stopPts);
+  const cos=Math.cos(angleMet), sin=Math.sin(angleMet);
+
+  // Project a [lat,lng] into the PCA (u,v) metre frame centred at cLat/cLng
+  function proj([lat,lng]){
+    const x=(lng-cLng)*111320*cosLat, y=(lat-cLat)*111320;
+    return [x*cos+y*sin, -x*sin+y*cos];
+  }
+
+  // Initial extents from ALL pts so the route path is inside the ellipse
+  let aMet=0, bMet=0;
+  for(const p of pts){ const [u,v]=proj(p); aMet=Math.max(aMet,Math.abs(u)); bMet=Math.max(bMet,Math.abs(v)); }
+
   const pad=ELLIPSE_PAD_METRES;
-  // Ensure minor axis has a minimum floor so route-only days aren't flat
-  const finalA=Math.max(aMet+pad, pad);
-  const finalB=Math.max(bMet+pad*0.5, pad*0.4);
-  const perim=geoEllipseAsPixels(cLat,cLng,finalA,finalB,angleMet,cosLat,64);
+  let A=Math.max(aMet+pad, pad);
+  let B=Math.max(bMet+pad*0.5, pad*0.4); // floor prevents flat ellipse for route-only days
+
+  // Two passes: expand whichever axis has more relative shortfall so stop points are inside.
+  // Targeted expansion (not uniform scaling) keeps the major axis tight at route endpoints.
+  for(let pass=0; pass<2; pass++){
+    for(const p of stopPts){
+      const [u,v]=proj(p);
+      const au=Math.abs(u), av=Math.abs(v);
+      if((u/A)**2+(v/B)**2 > 1.0){
+        if(au/A >= av/B) A=av<B ? au/Math.sqrt(Math.max(1e-9,1-(av/B)**2)) : au*1.001;
+        else              B=au<A ? av/Math.sqrt(Math.max(1e-9,1-(au/A)**2)) : av*1.001;
+      }
+    }
+  }
+
+  const perim=geoEllipseAsPixels(cLat,cLng,A,B,angleMet,cosLat,64);
   return ellipseToPath(wobbleEllipse(perim,seed));
 }
 
@@ -226,7 +234,7 @@ function refreshDayZones(){
     });
     if(!anyVisible) return;
 
-    const color=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+    const color=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
     const [rv,gv,bv]=[parseInt(color.slice(1,3),16),parseInt(color.slice(3,5),16),parseInt(color.slice(5,7),16)];
     const rgba=a=>`rgba(${rv},${gv},${bv},${a})`;
 

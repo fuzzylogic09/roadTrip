@@ -95,7 +95,7 @@ function tripData(){
     allPOIsHidden:S.allPOIsHidden||false,
     pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayIds:p.dayIds||[],cost:p.cost||0,costType:p.costType||'total',propagateAccom:p.propagateAccom!==false})),
     routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4'})),
-    days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',items:d.items.map(i=>Object.assign({},i))}))};
+    days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',color:d.color||'',items:d.items.map(i=>Object.assign({},i))}))};
 }
 function saveTrip(){ const data=tripData(); const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=data.tripName.replace(/\s+/g,'_')+'_v'+APP_VERSION+'.json'; a.click(); toast('Saved!','ok'); }
 async function loadData(json){
@@ -110,7 +110,7 @@ async function loadData(json){
     if(d.dayVisibility) Object.assign(S.dayVisibility, d.dayVisibility);
     if(d.poiVisibility) Object.assign(S.poiVisibility, d.poiVisibility);
     S.allPOIsHidden = !!d.allPOIsHidden;
-    (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
+    (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',color:day.color||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
     (d.pois||[]).forEach(p=>{ const dayIds=p.dayIds||(p.dayId?[Number(p.dayId)]:[]); addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayIds:dayIds.map(Number),cost:+(p.cost||0),costType:p.costType||'total',propagateAccom:p.propagateAccom!==false}); });
     fillRS('rf','rt','rd');
     const routes=d.routes||[];

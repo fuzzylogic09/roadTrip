@@ -24,7 +24,7 @@ function updStats(){
   renderEatingBudgetRows();
   scheduleZoneRefresh();
 }
-function ra(){ renderPOIs(); renderDays(); renderRoutes(); renderNearby(); updStats(); fillRS('rf','rt','rd'); refMDay(); renderDayOrderLines(); }
+function ra(){ renderPOIs(); renderDays(); renderRoutes(); renderNearby(); updStats(); fillRS('rf','rt','rd'); refMDay(); renderDayOrderLines(); scheduleZoneRefresh(); }
 
 /* ===================================================
    EVENTS

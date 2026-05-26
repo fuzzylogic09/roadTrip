@@ -210,6 +210,13 @@ function updDay(id,k,v){
   }
   d[k]=v;
 }
+function setDayColor(id, color){
+  const d=S.days.find(x=>x.id===id); if(!d) return;
+  d.color=color||''; scheduleZoneRefresh();
+  // Update the bubble without a full re-render
+  const bub=qs('.dayn-bubble[data-did="'+id+'"]');
+  if(bub) bub.style.background=color||DAY_ZONE_COLORS[S.days.indexOf(d)%DAY_ZONE_COLORS.length];
+}
 function delDay(id){
   const d=S.days.find(x=>x.id===id); if(!d) return;
   const idx=S.days.indexOf(d);
@@ -303,11 +310,13 @@ function renderDays(){
       costRows.forEach(cr=>{ costSummary+='<div class="dcs-row"><span>'+cr.l+(cr.s?' <span style="font-size:.59rem;color:var(--muted2);">('+cr.s+')</span>':'')+'</span><span>$'+cr.c.toFixed(2)+'</span></div>'; });
       costSummary+='<div class="dcs-row total"><span>💰 Day total</span><span>$'+dc.toFixed(2)+'</span></div></div>';
     }
-    const zoneColor=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+    const zoneColor=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
     const eatPlaceholder=S.eatingDefault?'$'+S.eatingDefault+' (default)':'$0';
     const hidden=isDayHidden(d.id);
     return '<div class="dayc" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
-      +'<div class="dayh"><div class="dayn-bubble" style="background:'+zoneColor+';">'+(di+1)+'</div>'
+      +'<div class="dayh">'
+      +'<div class="dayn-bubble" data-did="'+d.id+'" style="background:'+zoneColor+';cursor:pointer;" title="Click to change day color" onclick="qs(\'#dclr-'+d.id+'\').click()">'+(di+1)+'</div>'
+      +'<input type="color" id="dclr-'+d.id+'" value="'+zoneColor+'" style="display:none;width:0;height:0;padding:0;border:0;" oninput="setDayColor('+d.id+',this.value)">'
       +'<input class="dayti" value="'+esc(d.title)+'" onchange="updDay('+d.id+',\'title\',this.value)">'
       +'<input class="daydi" type="date"'+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value)">'
       +'<button class="btn bg bic bsm" onclick="setDayVisibility('+d.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show day':'Hide day')+'" style="font-size:.85rem;">'+(hidden?'👁‍🗨':'👁')+'</button>'
