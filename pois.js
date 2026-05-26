@@ -190,12 +190,37 @@ function insertDayAt(idx){
   }
   ra(); toast('Day inserted at position '+(idx+1),'ok');
 }
-function updDay(id,k,v){ const d=S.days.find(x=>x.id===id); if(d) d[k]=v; }
+function updDay(id,k,v){
+  const d=S.days.find(x=>x.id===id); if(!d) return;
+  if(k==='date'){
+    if(d.date && v){
+      // Cascade the date shift to all subsequent days that have a date
+      try{
+        const delta=Math.round((new Date(v)-new Date(d.date))/86400000);
+        if(delta!==0){
+          const idx=S.days.indexOf(d);
+          for(let i=idx+1;i<S.days.length;i++){
+            if(S.days[i].date){ try{ const dt=new Date(S.days[i].date); dt.setDate(dt.getDate()+delta); S.days[i].date=dt.toISOString().slice(0,10); }catch(e){} }
+          }
+        }
+      }catch(e){}
+    }
+    d.date=v;
+    ra(); return;
+  }
+  d[k]=v;
+}
 function delDay(id){
   const d=S.days.find(x=>x.id===id); if(!d) return;
+  const idx=S.days.indexOf(d);
   d.items.filter(i=>i.type==='poi').forEach(i=>{ const p=S.pois.find(x=>x.id===i.id); if(p) p.dayIds=(p.dayIds||[]).filter(x=>x!==id); });
   delete S.eatingBudgets[id];
-  S.days=S.days.filter(x=>x.id!==id); ra();
+  S.days=S.days.filter(x=>x.id!==id);
+  // Shift subsequent days back by 1 to close the date gap
+  for(let i=idx;i<S.days.length;i++){
+    if(S.days[i].date){ try{ const dt=new Date(S.days[i].date); dt.setDate(dt.getDate()-1); S.days[i].date=dt.toISOString().slice(0,10); }catch(e){} }
+  }
+  ra();
 }
 function rmItem(did,idx){
   const d=S.days.find(x=>x.id===did); if(!d) return;
