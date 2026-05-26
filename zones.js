@@ -63,6 +63,17 @@ function fitEllipseGeo(pts, centerPts){
     aMet=Math.max(aMet,Math.abs(u));
     bMet=Math.max(bMet,Math.abs(v));
   }
+  // max|u| and max|v| alone don't guarantee containment: a point at
+  // (0.9·aMet, 0.9·bMet) has ellipse-radius sqrt(0.81+0.81)=1.27 > 1.
+  // Scale both axes uniformly so every point satisfies (u/a)²+(v/b)² ≤ 1.
+  if(aMet>0 && bMet>0){
+    let maxR=0;
+    for(const [x,y] of mpts){
+      const u=x*cos+y*sin, v=-x*sin+y*cos;
+      maxR=Math.max(maxR, Math.sqrt((u/aMet)**2+(v/bMet)**2));
+    }
+    aMet*=maxR; bMet*=maxR;
+  }
   return {cLat,cLng,aMet,bMet,angleMet,cosLat};
 }
 
