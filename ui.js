@@ -113,8 +113,11 @@ function poiEffectiveCost(p){
 // Cost of a POI attributed to ONE specific day (for per-day cost rows)
 function poiCostForDay(p){
   const base = p.cost || 0;
-  // Whether total or perday, we show `base` per day (the user entered a per-day amount)
-  return base;
+  if(!base) return 0;
+  if(p.costType === 'perday') return base;
+  // total cost split equally across all days the POI spans
+  const nDays = (p.dayIds||[]).length || 1;
+  return +(base / nDays).toFixed(2);
 }
 
 function totalFuelCost(){ let t=0; S.routes.forEach(r=>t+=routeFuel(r)); return +t.toFixed(2); }

@@ -1,7 +1,7 @@
 /* =========================================================
-   RoadTrip Planner — app.js  v8.10.0
+   RoadTrip Planner — app.js  v8.10.1
    ========================================================= */
-const APP_VERSION = '8.10.0';
+const APP_VERSION = '8.10.1';
 const GOOGLE_CLIENT_ID = '940235006674-1mfg6a2qn7hkqu78irn2af34a507i76u.apps.googleusercontent.com';
 const DRIVE_FOLDER = 'RoadTripPlanner';
 

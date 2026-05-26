@@ -259,7 +259,7 @@ function renderDays(){
     const eatingOverridden=S.eatingBudgets[d.id]!==undefined&&S.eatingBudgets[d.id]!==null;
     const costRows=[];
     d.items.forEach(it=>{
-      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p&&poiCostForDay(p)>0) costRows.push({l:(CATS[p.cat]||'📍')+' '+p.name+(p.costType==='perday'?' (per day)':''),c:poiCostForDay(p),s:''}); }
+      if(it.type==='poi'){ const p=S.pois.find(x=>x.id===it.id); if(p&&poiCostForDay(p)>0){ const nDays=(p.dayIds||[]).length||1; const lbl=(CATS[p.cat]||'📍')+' '+p.name+(p.costType==='perday'?' (per day)':(nDays>1?' (÷'+nDays+' days)':'')); costRows.push({l:lbl,c:poiCostForDay(p),s:''}); } }
       if(it.type==='route'){ const r=S.routes.find(x=>x.id===it.id); if(r){ const tot=routeCost(r),fuel=routeFuel(r); if(tot>0){ const sub=[]; if(fuel>0) sub.push('fuel $'+fuel.toFixed(2)); if(r.fixedCost>0) sub.push('fixed $'+r.fixedCost.toFixed(2)); costRows.push({l:(MI[r.mode]||'🛣️')+' '+r.fromName+'→'+r.toName,c:tot,s:sub.join(' + ')}); } } }
     });
     if(eating>0) costRows.push({l:'🍽️ Eating'+(eatingOverridden?' (custom)':' (default)'),c:eating,s:''});
