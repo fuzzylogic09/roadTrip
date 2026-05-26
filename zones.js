@@ -52,15 +52,16 @@ function latlngToMetres(pts){
 }
 
 // Fit minimum bounding ellipse using PCA in metre-space.
-// Returns {cx_lat, cx_lng, aMet, bMet, angleMet}
-// where aMet/bMet are semi-axes in metres, angleMet is the rotation angle in metre-space.
-function fitEllipseGeo(pts){
+// pts       = points used for PCA orientation and axis extents (may include route samples)
+// centerPts = points used for the ellipse centroid (POIs + endpoints only, optional)
+function fitEllipseGeo(pts, centerPts){
   const n=pts.length;
-  const cLat=pts.reduce((s,p)=>s+p[0],0)/n;
-  const cLng=pts.reduce((s,p)=>s+p[1],0)/n;
+  const cPts=(centerPts && centerPts.length) ? centerPts : pts;
+  const cLat=cPts.reduce((s,p)=>s+p[0],0)/cPts.length;
+  const cLng=cPts.reduce((s,p)=>s+p[1],0)/cPts.length;
   const cosLat=Math.cos(cLat*Math.PI/180)||1;
 
-  // Convert to metres centred at centroid
+  // Convert pts to metres centred at cPts centroid
   const mpts=pts.map(([lat,lng])=>[
     (lng-cLng)*111320*cosLat,
     (lat-cLat)*111320
@@ -68,8 +69,6 @@ function fitEllipseGeo(pts){
   let sxx=0,sxy=0,syy=0;
   for(const [x,y] of mpts){ sxx+=x*x; sxy+=x*y; syy+=y*y; }
   sxx/=n; sxy/=n; syy/=n;
-  const trace=sxx+syy, disc=Math.sqrt(Math.max(0,(sxx-syy)**2/4+sxy**2));
-  const l1=trace/2+disc;
   // Angle of major axis in metre-space
   let angleMet=0;
   if(Math.abs(sxy)>1e-6||Math.abs(sxx-syy)>1e-6) angleMet=Math.atan2(2*sxy, sxx-syy)/2;
@@ -180,8 +179,8 @@ function buildDayPath(fitGeoPts, mustContainPts, seed){
     return ellipseToPath(wobbleEllipse(perim,seed));
   }
 
-  // General case: fit to POIs + endpoints; expand on retry until all fit inside
-  const {cLat,cLng,aMet:rawA,bMet:rawB,angleMet,cosLat}=fitEllipseGeo(fitPts);
+  // General case: orient via fitPts, centre on mustContainPts to avoid route-sample bias
+  const {cLat,cLng,aMet:rawA,bMet:rawB,angleMet,cosLat}=fitEllipseGeo(fitPts, mustContainPts);
 
   for(let attempt=0;attempt<4;attempt++){
     const extra=attempt*ELLIPSE_EXTRA_METRES;
