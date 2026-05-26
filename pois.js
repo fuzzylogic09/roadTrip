@@ -10,9 +10,10 @@ function addPOI(ll, data){
     tags:data.tags||[], lat:ll.lat, lng:ll.lng, locked:data.locked!==false,
     dayIds, cost:+(data.cost||0), costType:data.costType||'total',
     propagateAccom: data.propagateAccom!==false && isAccomCat(data.cat||'general'),
+    colorLocked: !!data.colorLocked,
     marker:null
   };
-  const mk = L.marker([p.lat,p.lng],{icon:mkPin(p.color,CATS[p.cat]||'📍'),draggable:false}).addTo(map);
+  const mk = L.marker([p.lat,p.lng],{icon:mkPin(getPoiColor(p),CATS[p.cat]||'📍'),draggable:false}).addTo(map);
   mk.bindPopup('',{minWidth:195});
   mk.on('click',()=>{ mk.setPopupContent(popH(p)); mk.openPopup(); fetchPhotos(p.name,L.latLng(p.lat,p.lng)).then(imgs=>{ if(!imgs.length) return; const pop=mk.getPopup(); if(pop&&pop.isOpen()){ const pw=qs('.pop-photos',pop.getElement()); if(pw) pw.innerHTML=ph(imgs,'pop-photo'); } }); });
   mk.on('dragend',e2=>{ p.lat=e2.target.getLatLng().lat; p.lng=e2.target.getLatLng().lng; refreshRt(p.id).then(()=>ra()); });
@@ -49,6 +50,7 @@ function setPOIDays(p,newDayIds){
   newDayIds.forEach(did=>syncPD(p,did));
   p.dayIds=newDayIds;
   if(p.marker) p.marker.closePopup();
+  if(!p.colorLocked&&p.marker) p.marker.setIcon(mkPin(getPoiColor(p),CATS[p.cat]||'📍'));
 }
 /** Called from map popup checkbox — toggles one day assignment without closing popup */
 function quickTogglePOIDay(poiId, dayId, add){
@@ -80,7 +82,7 @@ function popH(p){
     +'<div style="display:flex;flex-direction:column;gap:3px;max-height:90px;overflow-y:auto;">'
     +S.days.map((d,di)=>{
       const checked=(p.dayIds||[]).includes(d.id);
-      const c=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+      const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
       return'<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.68rem;">'
         +'<input type="checkbox" '+(checked?'checked':'')+' style="accent-color:'+c+';cursor:pointer;" onchange="quickTogglePOIDay('+p.id+','+d.id+',this.checked)">'
         +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0;"></span>'
@@ -108,7 +110,8 @@ function editPOI(id){
   S.editing=id;
   qs('#m-name').value=p.name; qs('#m-desc').value=p.desc||''; qs('#m-cat').value=p.cat; qs('#m-rat').value=p.rating||'';
   qs('#m-tags').value=(p.tags||[]).join(', '); qs('#m-cost').value=p.cost||'';
-  selCol(p.color); renderLinks(p.links||[]);
+  if(p.colorLocked) selCol(p.color); else { S.col=p.color; selColAuto(); }
+  renderLinks(p.links||[]);
   qs('#m-hd').textContent='Edit POI'; qs('#m-ico').textContent=CATS[p.cat]||'📍';
   // cost type
   setCostType(p.costType||'total');
@@ -148,14 +151,15 @@ function renderPOIs(){
     const effectivelyHidden  = !poiEffectivelyVisible(p);
     // Day-forced visibility hint (show which days are hiding this POI)
     const hiddenByDays = !individuallyHidden && effectivelyHidden;
-    const dayBadges=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); if(!d) return''; const di=S.days.indexOf(d); const c=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length]; const dimmed=isDayHidden(did); return'<span class="pday-badge" style="background:'+c+';'+(dimmed?'opacity:.4;':'')+'">'+esc(d.title)+'</span>'; }).join('');
+    const dayBadges=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); if(!d) return''; const di=S.days.indexOf(d); const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length]; const dimmed=isDayHidden(did); return'<span class="pday-badge" style="background:'+c+';'+(dimmed?'opacity:.4;':'')+'">'+esc(d.title)+'</span>'; }).join('');
     const eff=poiEffectiveCost(p);
     const costStr = p.costType==='perday' && (p.dayIds||[]).length>1 ? '$'+p.cost+'/day':'';
     // Eye icon: shows individual state; if dimmed by day, show a different hint
     const eyeIcon  = individuallyHidden ? '👁‍🗨' : '👁';
     const eyeTitle = individuallyHidden ? 'Show POI' : (hiddenByDays ? 'Hidden by day — click to force show' : 'Hide POI');
+    const pc_=getPoiColor(p);
     return '<div class="poic" data-pid="'+p.id+'" onclick="focusPOI('+p.id+')" style="'+(effectivelyHidden?'opacity:.4;':'')+'}">'
-      +'<div class="ppin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
+      +'<div class="ppin" style="background:'+pc_+'22;color:'+pc_+';">'+(CATS[p.cat]||'📍')+'</div>'
       +'<div class="pbody"><div class="pname">'+esc(p.name)+(p.locked?' 🔒':'')+'</div>'
       +'<div class="pmeta">'+(p.rating?'<span>'+'★'.repeat(+p.rating)+'</span>':'')+'</div>'
       +(eff?'<div class="pcost">💰 $'+eff.toFixed(2)+(costStr?' <span style="font-size:.55rem;opacity:.7;">('+costStr+')</span>':'')+'</div>':'')
@@ -235,9 +239,12 @@ function setAllDaysCollapsed(v){
 function setDayColor(id, color){
   const d=S.days.find(x=>x.id===id); if(!d) return;
   d.color=color||''; scheduleZoneRefresh();
-  // Update the bubble without a full re-render
   const bub=qs('.dayn-bubble[data-did="'+id+'"]');
   if(bub) bub.style.background=color||DAY_ZONE_COLORS[S.days.indexOf(d)%DAY_ZONE_COLORS.length];
+  // Refresh auto-colored POI markers assigned to this day
+  S.pois.forEach(p=>{ if(!p.colorLocked&&(p.dayIds||[]).includes(id)&&p.marker) p.marker.setIcon(mkPin(getPoiColor(p),CATS[p.cat]||'📍')); });
+  // Refresh route polylines for this day
+  S.routes.forEach(r=>{ if(r.dayId===id&&r.poly) r.poly.setStyle({color:getRouteColor(r)}); });
 }
 function delDay(id){
   const d=S.days.find(x=>x.id===id); if(!d) return;
@@ -292,9 +299,10 @@ function renderDays(){
     // Ghost items (accommodation from previous day) — rendered first, not draggable above
     ghosts.forEach(g=>{
       const p=S.pois.find(x=>x.id===g.poiId); if(!p) return;
+      const gpc_=getPoiColor(p);
       items+='<div class="day-item" style="opacity:.45;background:rgba(0,0,0,.04);border-style:dashed;cursor:default;" title="Starting point (from previous day)">'
         +'<span style="font-size:.7rem;flex-shrink:0;">🔗</span>'
-        +'<div class="dipin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
+        +'<div class="dipin" style="background:'+gpc_+'22;color:'+gpc_+';">'+(CATS[p.cat]||'📍')+'</div>'
         +'<span class="diname" style="color:var(--muted);">'+esc(p.name)+' <span style="font-size:.58rem;">(carry-over)</span></span>'
         +'<button class="btn bg bic bsm" onclick="focusPOI('+p.id+')" style="opacity:.6;">👁</button>'
         +'</div>';
@@ -304,9 +312,10 @@ function renderDays(){
       items+='<div class="day-dropzone" data-did="'+d.id+'" data-idx="'+idx+'"></div>';
       if(it.type==='poi'){
         const p=S.pois.find(x=>x.id===it.id); if(!p) return;
+        const ipc_=getPoiColor(p);
         items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="poi" data-iid="'+p.id+'">'
           +'<span class="di-grip">⋮⋮</span>'
-          +'<div class="dipin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
+          +'<div class="dipin" style="background:'+ipc_+'22;color:'+ipc_+';">'+(CATS[p.cat]||'📍')+'</div>'
           +'<span class="diname" ondblclick="editPOI('+p.id+')" onclick="focusPOI('+p.id+')">'+esc(p.name)+'</span>'
           +(poiCostForDay(p)?'<span class="di-cost">$'+poiCostForDay(p).toFixed(2)+'</span>':'')
           +'<button class="btn bg bic bsm" onclick="editPOI('+p.id+')" title="Edit">✏️</button>'
@@ -315,9 +324,10 @@ function renderDays(){
       } else if(it.type==='route'){
         const r=S.routes.find(x=>x.id===it.id); if(!r) return;
         const tot=routeCost(r);
-        items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="route" data-iid="'+r.id+'" style="background:rgba(29,86,212,.05);border-color:rgba(29,86,212,.2);">'
+        const irc_=getRouteColor(r);
+        items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="route" data-iid="'+r.id+'" style="background:'+irc_+'11;border-color:'+irc_+'44;">'
           +'<span class="di-grip">⋮⋮</span><span style="flex-shrink:0;">'+(MI[r.mode]||'🛣️')+'</span>'
-          +'<span class="diname" style="color:var(--blue);" onclick="(function(){var r2=S.routes.find(x=>x.id==='+r.id+');if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
+          +'<span class="diname" style="color:'+irc_+';" onclick="(function(){var r2=S.routes.find(x=>x.id==='+r.id+');if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
           +(tot?'<span class="di-cost">$'+tot.toFixed(2)+'</span>':'')
           +'<button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')" title="Edit">✏️</button>'
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
@@ -396,15 +406,17 @@ function moveItem(fDid,fIdx,itype,iid,tDid,tIdx){
 /* ===================================================
    ROUTES
 =================================================== */
-async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
+async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist,colorLocked){
   const from=S.pois.find(p=>p.id===fi||p.id==fi), to=S.pois.find(p=>p.id===ti||p.id==ti);
   if(!from||!to){ toast('POIs not found','err'); return; }
   if(from.id===to.id){ toast('Same start and end!','err'); return; }
   const fc=+(fixedCost||0); let dist,dur,coords,poly;
+  const explicitCol=S.rtCol||RCOL[mode]||'#1d56d4';
+  const effectiveCol=(colorLocked&&explicitCol)||(!colorLocked&&dayId&&getDayColor(dayId))||explicitCol;
   if(mode==='manual'){
     dist=+(manualDist||from.marker.getLatLng().distanceTo(to.marker.getLatLng())/1000).toFixed(1);
     dur=0; coords=[[from.lat,from.lng],[to.lat,to.lng]];
-    poly=L.polyline(coords,{color:S.rtCol||RCOL.manual,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map);
+    poly=L.polyline(coords,{color:effectiveCol,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map);
     closeDrawerMobile(); map.fitBounds(L.latLngBounds(coords),{padding:[50,50]});
   } else {
     toast('Calculating...','');
@@ -414,7 +426,7 @@ async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
       if(data.code!=='Ok'){ toast('Route not found','err'); return; }
       dist=+(data.routes[0].distance/1000).toFixed(1); dur=Math.round(data.routes[0].duration/60);
       coords=data.routes[0].geometry.coordinates.map(c=>[c[1],c[0]]);
-      poly=L.polyline(coords,{color:S.rtCol||RCOL[mode]||'#1d56d4',weight:4.5,opacity:.82,dashArray:mode==='foot'?'8 5':null}).addTo(map);
+      poly=L.polyline(coords,{color:effectiveCol,weight:4.5,opacity:.82,dashArray:mode==='foot'?'8 5':null}).addTo(map);
       closeDrawerMobile(); map.fitBounds(poly.getBounds(),{padding:[50,50]});
     }catch(e){ toast('Connection error','err'); return; }
   }
@@ -423,12 +435,12 @@ async function calcRoute(fi,ti,mode,dayId,editId,fixedCost,manualDist){
     if(old){ if(old.poly) map.removeLayer(old.poly); clearRouteHourDots(old); S.routes=S.routes.filter(r=>r.id!==editId); S.days.forEach(d=>{ d.items=d.items.filter(i=>!(i.type==='route'&&i.id===editId)); }); }
   }
   const rid=editId||nid();
-  const rt={id:rid,fromId:from.id,toId:to.id,fromName:from.name,toName:to.name,mode,dist,dur,coords,poly,dayId:dayId||null,fixedCost:fc,color:S.rtCol||RCOL[mode]||'#1d56d4',hourDotMarkers:[]};
+  const rt={id:rid,fromId:from.id,toId:to.id,fromName:from.name,toName:to.name,mode,dist,dur,coords,poly,dayId:dayId||null,fixedCost:fc,color:explicitCol,colorLocked:!!colorLocked,hourDotMarkers:[]};
   S.routes.push(rt); bindRouteHover(rt); placeHourDots(rt);
   if(dayId){ const d=S.days.find(x=>x.id==dayId); if(d&&!d.items.some(i=>i.type==='route'&&i.id===rid)) d.items.push({type:'route',id:rid}); }
   ra(); const tc=routeCost(rt); toast(dist+'km'+(dur?' · '+fmtD(dur):'')+(tc?' · $'+tc.toFixed(2):'')+' ✓','ok'); return rt;
 }
-async function refreshRt(pid){ for(const r of S.routes.filter(r=>r.fromId===pid||r.toId===pid)){ toast('Updating route…',''); await calcRoute(r.fromId,r.toId,r.mode,r.dayId,r.id,r.fixedCost,r.mode==='manual'?r.dist:null); } }
+async function refreshRt(pid){ for(const r of S.routes.filter(r=>r.fromId===pid||r.toId===pid)){ toast('Updating route…',''); if(r.colorLocked) S.rtCol=r.color; await calcRoute(r.fromId,r.toId,r.mode,r.dayId,r.id,r.fixedCost,r.mode==='manual'?r.dist:null,r.colorLocked); } }
 function delRoute(id){
   const i=S.routes.findIndex(r=>r.id===id); if(i<0) return;
   if(S.routes[i].poly) map.removeLayer(S.routes[i].poly); clearRouteHourDots(S.routes[i]); S.routes.splice(i,1);
@@ -438,7 +450,10 @@ function openRouteEdit(id){
   S.editRid=id; const r=S.routes.find(x=>x.id===id); if(!r) return;
   fillRS('ref','ret','red'); qs('#ref').value=r.fromId; qs('#ret').value=r.toId; qs('#rem').value=r.mode;
   qs('#red').value=r.dayId||''; qs('#re-cost').value=r.fixedCost||''; qs('#re-manual-dist').value=r.mode==='manual'?r.dist:'';
-  S.rtCol2=r.color||'#1d56d4'; qsa('[data-rc2]').forEach(s2=>s2.classList.toggle('on',s2.dataset.rc2===S.rtCol2)); qs('#rmbk').classList.add('on');
+  S.rtCol2=r.color||'#1d56d4';
+  if(r.colorLocked) qsa('[data-rc2]').forEach(s2=>s2.classList.toggle('on',s2.dataset.rc2===S.rtCol2));
+  else qsa('[data-rc2]').forEach(s2=>s2.classList.remove('on'));
+  qs('#rmbk').classList.add('on');
 }
 function fillRS(f,t,d){
   const po='<option value="">— POI —</option>'+S.pois.map(p=>'<option value="'+p.id+'">'+(CATS[p.cat]||'📍')+' '+esc(p.name)+'</option>').join('');
@@ -455,7 +470,7 @@ function renderRoutes(){
     const day=r.dayId?S.days.find(d=>d.id===r.dayId):null;
     const tot=routeCost(r); const fuel=routeFuel(r);
     const chips=[]; if(fuel>0) chips.push('⛽ $'+fuel.toFixed(2)); if(r.fixedCost>0) chips.push('🎫 $'+r.fixedCost.toFixed(2));
-    return '<div class="rtc"><div class="rth"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+(r.color||'#1d56d4')+';margin-right:3px;"></span><span class="rnum">#'+(i+1)+'</span><span class="rname">'+esc(r.fromName)+' → '+esc(r.toName)+'</span><button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')">✏️</button><button class="btn br bic bsm" onclick="delRoute('+r.id+')">🗑</button></div>'
+    return '<div class="rtc"><div class="rth"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+getRouteColor(r)+';margin-right:3px;"></span><span class="rnum">#'+(i+1)+'</span><span class="rname">'+esc(r.fromName)+' → '+esc(r.toName)+'</span><button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')">✏️</button><button class="btn br bic bsm" onclick="delRoute('+r.id+')">🗑</button></div>'
       +'<div class="rmeta"><span>'+(MI[r.mode]||'🚗')+'</span><span>🛣️ <b>'+r.dist+'km</b></span>'+(r.dur?'<span>⏱ <b>'+fmtD(r.dur)+'</b></span>':'')+(day?'<span>📅 <b>'+esc(day.title)+'</b></span>':'')+'</div>'
       +(tot?'<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">'+chips.map(c=>'<span class="cost-chip">'+c+'</span>').join('')+(chips.length>1?'<span class="cost-chip" style="background:rgba(184,134,11,.18);">= $'+tot.toFixed(2)+'</span>':'')+'</div>':'')
       +'<button class="btn bg bsm" style="margin-top:4px;" onclick="(function(){var r2=S.routes.find(x=>x.id==='+r.id+');if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">🗺️ Show</button>'

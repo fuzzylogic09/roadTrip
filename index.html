@@ -176,7 +176,7 @@
         <div class="fld">
           <label class="lbl">Route color</label>
           <div class="crow" id="rt-colors" style="margin-top:4px;">
-            <div class="csw on" style="background:#1d56d4" data-rc="#1d56d4"></div>
+            <div class="csw" style="background:#1d56d4" data-rc="#1d56d4"></div>
             <div class="csw" style="background:#15803d" data-rc="#15803d"></div>
             <div class="csw" style="background:#d4920a" data-rc="#d4920a"></div>
             <div class="csw" style="background:#c81e1e" data-rc="#c81e1e"></div>
@@ -184,6 +184,7 @@
             <div class="csw" style="background:#0e7eb5" data-rc="#0e7eb5"></div>
             <div class="csw" style="background:#b01e6a" data-rc="#b01e6a"></div>
             <div class="csw" style="background:#c94f14" data-rc="#c94f14"></div>
+            <button class="btn bg bsm" onclick="selRtColAuto()" title="Auto-color from assigned day" style="font-size:.63rem;padding:2px 6px;white-space:nowrap;">↩ Auto</button>
           </div>
         </div>
         <button class="btn bb bfw" id="btn-calc">Calculate Route →</button>
@@ -369,9 +370,9 @@
     <div id="m-days-list"><div style="font-size:.65rem;color:var(--muted);">No days yet.</div></div>
     <select id="m-day" style="display:none;"></select>
   </div>
-  <div class="fld"><label class="lbl">Color</label>
+  <div class="fld"><label class="lbl">Color <span id="m-color-hint" style="font-size:.6rem;color:var(--muted);font-weight:400;">(auto from day)</span></label>
     <div class="crow">
-      <div class="csw on" style="background:#c94f14" data-c="#c94f14"></div>
+      <div class="csw" style="background:#c94f14" data-c="#c94f14"></div>
       <div class="csw" style="background:#1d56d4" data-c="#1d56d4"></div>
       <div class="csw" style="background:#15803d" data-c="#15803d"></div>
       <div class="csw" style="background:#d4920a" data-c="#d4920a"></div>
@@ -379,6 +380,7 @@
       <div class="csw" style="background:#c81e1e" data-c="#c81e1e"></div>
       <div class="csw" style="background:#0e7eb5" data-c="#0e7eb5"></div>
       <div class="csw" style="background:#b01e6a" data-c="#b01e6a"></div>
+      <button class="btn bg bsm" onclick="selColAuto()" title="Auto-color from assigned day" style="font-size:.63rem;padding:2px 6px;white-space:nowrap;">↩ Auto</button>
     </div>
   </div>
   <div class="fld"><label class="lbl">Links / URLs</label>
@@ -410,7 +412,7 @@
   <div class="fld">
     <label class="lbl">Route color</label>
     <div class="crow" id="re-colors" style="margin-top:4px;">
-      <div class="csw on" style="background:#1d56d4" data-rc2="#1d56d4"></div>
+      <div class="csw" style="background:#1d56d4" data-rc2="#1d56d4"></div>
       <div class="csw" style="background:#15803d" data-rc2="#15803d"></div>
       <div class="csw" style="background:#d4920a" data-rc2="#d4920a"></div>
       <div class="csw" style="background:#c81e1e" data-rc2="#c81e1e"></div>
@@ -418,6 +420,7 @@
       <div class="csw" style="background:#0e7eb5" data-rc2="#0e7eb5"></div>
       <div class="csw" style="background:#b01e6a" data-rc2="#b01e6a"></div>
       <div class="csw" style="background:#c94f14" data-rc2="#c94f14"></div>
+      <button class="btn bg bsm" onclick="selRtCol2Auto()" title="Auto-color from assigned day" style="font-size:.63rem;padding:2px 6px;white-space:nowrap;">↩ Auto</button>
     </div>
   </div>
   <div class="mfoot"><button class="btn bg" id="re-cancel">Cancel</button><button class="btn bb" id="re-save">Recalculate &amp; Save</button></div>

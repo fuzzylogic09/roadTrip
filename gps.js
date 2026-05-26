@@ -27,7 +27,7 @@ function renderMDayCheckboxes(selectedIds){
   if(!S.days.length){ el.innerHTML='<div style="font-size:.65rem;color:var(--muted);">No days yet.</div>'; return; }
   el.innerHTML=S.days.map((d,di)=>{
     const checked=selectedIds.includes(d.id)?'checked':'';
-    const c=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+    const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
     return'<label class="mday-row"><input type="checkbox" value="'+d.id+'" '+checked+' onchange="updateCostTypeUI()"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+c+';flex-shrink:0;"></span>'+esc(d.title)+(d.date?' <span style="color:var(--muted2);font-size:.6rem;">'+d.date+'</span>':'')+'</label>';
   }).join('');
   updateCostTypeUI();
@@ -66,7 +66,10 @@ function openModal(ll,name){
   qs('#mbk').classList.add('on'); setTimeout(()=>qs('#m-name').focus(),80);
 }
 function closeModal(){ qs('#mbk').classList.remove('on'); S.editing=null; restoreDrawer(); }
-function selCol(c){ S.col=c; qsa('.csw').forEach(s=>s.classList.toggle('on',s.dataset.c===c)); }
+function selCol(c){ S.col=c; qsa('.csw').forEach(s=>s.classList.toggle('on',s.dataset.c===c)); const h=qs('#m-color-hint'); if(h) h.textContent='(custom)'; }
+function selColAuto(){ qsa('.csw[data-c]').forEach(s=>s.classList.remove('on')); const h=qs('#m-color-hint'); if(h) h.textContent='(auto from day)'; }
+function selRtColAuto(){ qsa('.csw[data-rc]').forEach(s=>s.classList.remove('on')); }
+function selRtCol2Auto(){ qsa('.csw[data-rc2]').forEach(s=>s.classList.remove('on')); }
 function renderLinks(links){ const el=qs('#m-links'); el.innerHTML=''; (links.length?links:[{label:'',url:''}]).forEach(lk=>{ const row=document.createElement('div'); row.className='lrow'; row.innerHTML='<input class="inp" style="width:76px;flex-shrink:0;" placeholder="Label" value="'+(lk.label||'')+'"><input class="inp" style="flex:1;" placeholder="https://..." value="'+(lk.url||'')+'"><button class="btn br bic bsm" onclick="this.parentNode.remove()">✕</button>'; el.appendChild(row); }); }
 function getLinks(){ return qsa('.lrow').map(row=>{ const i=row.querySelectorAll('input'); return{label:i[0].value.trim(),url:i[1].value.trim()}; }).filter(l=>l.url); }
 
@@ -93,8 +96,8 @@ function tripData(){
     dayVisibility:Object.assign({},S.dayVisibility),
     poiVisibility:Object.assign({},S.poiVisibility),
     allPOIsHidden:S.allPOIsHidden||false,
-    pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayIds:p.dayIds||[],cost:p.cost||0,costType:p.costType||'total',propagateAccom:p.propagateAccom!==false})),
-    routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4'})),
+    pois:S.pois.map(p=>({id:p.id,name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,lat:p.lat,lng:p.lng,locked:p.locked,dayIds:p.dayIds||[],cost:p.cost||0,costType:p.costType||'total',propagateAccom:p.propagateAccom!==false,colorLocked:p.colorLocked||false})),
+    routes:S.routes.map(r=>({id:r.id,fromId:r.fromId,toId:r.toId,fromName:r.fromName,toName:r.toName,mode:r.mode,dist:r.dist,dur:r.dur,dayId:r.dayId,fixedCost:r.fixedCost||0,color:r.color||'#1d56d4',colorLocked:r.colorLocked||false})),
     days:S.days.map(d=>({id:d.id,title:d.title,date:d.date||'',color:d.color||'',items:d.items.map(i=>Object.assign({},i))}))};
 }
 function saveTrip(){ const data=tripData(); const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=data.tripName.replace(/\s+/g,'_')+'_v'+APP_VERSION+'.json'; a.click(); toast('Saved!','ok'); }
@@ -111,13 +114,13 @@ async function loadData(json){
     if(d.poiVisibility) Object.assign(S.poiVisibility, d.poiVisibility);
     S.allPOIsHidden = !!d.allPOIsHidden;
     (d.days||[]).forEach(day=>S.days.push({id:Number(day.id),title:day.title,date:day.date||'',color:day.color||'',items:(day.items||[]).map(i=>Object.assign({},i))}));
-    (d.pois||[]).forEach(p=>{ const dayIds=p.dayIds||(p.dayId?[Number(p.dayId)]:[]); addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayIds:dayIds.map(Number),cost:+(p.cost||0),costType:p.costType||'total',propagateAccom:p.propagateAccom!==false}); });
+    (d.pois||[]).forEach(p=>{ const dayIds=p.dayIds||(p.dayId?[Number(p.dayId)]:[]); addPOI({lat:p.lat,lng:p.lng},{id:Number(p.id),name:p.name,desc:p.desc,cat:p.cat,color:p.color,rating:p.rating,links:p.links,tags:p.tags,locked:p.locked,dayIds:dayIds.map(Number),cost:+(p.cost||0),costType:p.costType||'total',propagateAccom:p.propagateAccom!==false,colorLocked:p.colorLocked||false}); });
     fillRS('rf','rt','rd');
     const routes=d.routes||[];
     if(routes.length){ toast('Recalculating '+routes.length+' route(s)…','');
-      for(const r of routes){ const savedCol=r.color||'#1d56d4'; S.rtCol=savedCol;
-        if(r.mode==='manual'){ const from=S.pois.find(p=>p.id===Number(r.fromId)),to=S.pois.find(p=>p.id===Number(r.toId)); if(from&&to){ const coords=[[from.lat,from.lng],[to.lat,to.lng]]; const poly=L.polyline(coords,{color:savedCol,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map); const rt=Object.assign({},r,{id:Number(r.id),fromId:Number(r.fromId),toId:Number(r.toId),dayId:r.dayId?Number(r.dayId):null,fixedCost:+(r.fixedCost||0),color:savedCol,coords,poly,hourDotMarkers:[]}); S.routes.push(rt); bindRouteHover(rt); placeHourDots(rt); } }
-        else{ await calcRoute(Number(r.fromId),Number(r.toId),r.mode,r.dayId?Number(r.dayId):null,Number(r.id),+(r.fixedCost||0),null); const rt=S.routes.find(x=>x.id===Number(r.id)); if(rt){ rt.color=savedCol; if(rt.poly) rt.poly.setStyle({color:savedCol}); placeHourDots(rt); } } }
+      for(const r of routes){ const savedCol=r.color||'#1d56d4'; const cl=r.colorLocked||false; S.rtCol=savedCol;
+        if(r.mode==='manual'){ const from=S.pois.find(p=>p.id===Number(r.fromId)),to=S.pois.find(p=>p.id===Number(r.toId)); if(from&&to){ const coords=[[from.lat,from.lng],[to.lat,to.lng]]; const poly=L.polyline(coords,{color:savedCol,weight:3,opacity:.8,dashArray:'10 6'}).addTo(map); const rt=Object.assign({},r,{id:Number(r.id),fromId:Number(r.fromId),toId:Number(r.toId),dayId:r.dayId?Number(r.dayId):null,fixedCost:+(r.fixedCost||0),color:savedCol,colorLocked:cl,coords,poly,hourDotMarkers:[]}); S.routes.push(rt); bindRouteHover(rt); placeHourDots(rt); if(rt.poly) rt.poly.setStyle({color:getRouteColor(rt)}); } }
+        else{ await calcRoute(Number(r.fromId),Number(r.toId),r.mode,r.dayId?Number(r.dayId):null,Number(r.id),+(r.fixedCost||0),null,cl); const rt=S.routes.find(x=>x.id===Number(r.id)); if(rt){ rt.color=savedCol; rt.colorLocked=cl; if(rt.poly) rt.poly.setStyle({color:getRouteColor(rt)}); placeHourDots(rt); } } }
     }
     ra();
     if(S.pois.length) map.fitBounds(L.latLngBounds(S.pois.map(p=>[p.lat,p.lng])),{padding:[50,50]});

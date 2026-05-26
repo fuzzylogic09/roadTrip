@@ -95,6 +95,13 @@ function toast(msg,type=''){
 }
 
 /* ===================================================
+   COLOR HELPERS
+=================================================== */
+function getDayColor(dayId){ const idx=S.days.findIndex(x=>x.id===dayId); if(idx<0) return null; const d=S.days[idx]; return d.color||DAY_ZONE_COLORS[idx%DAY_ZONE_COLORS.length]; }
+function getPoiColor(p){ if(p.colorLocked) return p.color; if(p.dayIds&&p.dayIds.length){ const c=getDayColor(p.dayIds[0]); if(c) return c; } return p.color; }
+function getRouteColor(r){ if(r.colorLocked) return r.color; if(r.dayId){ const c=getDayColor(r.dayId); if(c) return c; } return r.color||RCOL[r.mode]||'#1d56d4'; }
+
+/* ===================================================
    FINANCE
 =================================================== */
 function getFP(){ return { c: parseFloat(qs('#f-consump').value)||7, p: parseFloat(qs('#f-price').value)||1.70 }; }
