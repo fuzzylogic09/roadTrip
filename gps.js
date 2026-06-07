@@ -74,7 +74,7 @@ function selCol(c){
 }
 function selColAuto(){
   qsa('.csw[data-c]').forEach(s=>s.classList.remove('on'));
-  const h=qs('#m-color-hint'); if(h) h.textContent='(auto depuis le jour)';
+  const h=qs('#m-color-hint'); if(h) h.textContent='(auto from day)';
   const prev=qs('#m-color-preview'); if(prev) prev.style.background='var(--border2)';
 }
 
@@ -91,7 +91,7 @@ function closeFormColorPicker(){ const m=qs('#form-cpick-modal'); if(m) m.style.
 function updateDayBadges(){
   const badges=qs('#m-days-badges'); if(!badges) return;
   const ids=getSelectedDayIds();
-  if(!ids.length){ badges.innerHTML='<span style="font-size:.63rem;color:var(--muted);">Aucun jour</span>'; return; }
+  if(!ids.length){ badges.innerHTML='<span style="font-size:.63rem;color:var(--muted);">No day assigned</span>'; return; }
   badges.innerHTML=ids.map(id=>{ const d=S.days.find(x=>x.id===id); if(!d) return''; const di=S.days.indexOf(d); const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length]; return'<span style="background:'+c+';color:#fff;border-radius:8px;padding:1px 7px;font-size:.6rem;font-weight:700;">'+esc(d.title)+'</span>'; }).join('');
 }
 function openFormDaysModal(){

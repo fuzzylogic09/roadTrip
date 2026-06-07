@@ -379,7 +379,7 @@ function renderDays(){
     const hidden=isDayHidden(d.id);
     const collapsed=!!S.dayCollapsed[d.id];
     const fdate=fmtDate(d.date);
-    const hotelWarn=!hasHotel?'<span class="day-hotel-warn" title="Pas d\'hôtel/hébergement pour ce jour">⚠️🏨</span>':'';
+    const hotelWarn=!hasHotel?'<span class="day-hotel-warn" title="No hotel/accommodation for this day">⚠️🏨</span>':'';
     return '<div class="dayc'+(collapsed?' dayc--collapsed':'')+'" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
       +'<div class="dayh">'
       +'<div class="dayn-bubble" data-did="'+d.id+'" style="background:'+zoneColor+';cursor:pointer;" title="Click to change day color" onclick="qs(\'#dclr-'+d.id+'\').click()">'+(di+1)+'</div>'
