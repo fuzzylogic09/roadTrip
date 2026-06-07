@@ -111,6 +111,15 @@ const RCOL={car:'#1d56d4',foot:'#15803d',bike:'#d4920a',manual:'#9333ea'};
 const MI={car:'🚗',foot:'🚶',bike:'🚲',manual:'✏️'};
 const PC={};
 
+function fmtDate(s){
+  if(!s) return '';
+  try{ const d=new Date(s+'T12:00:00'); return d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}); }
+  catch(e){ return s; }
+}
+
+// Track collapsed state of day cards
+const S_dayCollapsed = {};
+
 /* ===================================================
    DRAWER
 =================================================== */
@@ -977,6 +986,12 @@ function insertDayAt(idx){
   ra(); toast('Day inserted at position '+(idx+1),'ok');
 }
 function updDay(id,k,v){ const d=S.days.find(x=>x.id===id); if(d) d[k]=v; }
+function toggleDayCollapse(id){
+  S_dayCollapsed[id]=!S_dayCollapsed[id];
+  const card=qs('.dayc[data-dcid="'+id+'"]'); if(!card) return;
+  card.classList.toggle('dayc--collapsed',!!S_dayCollapsed[id]);
+  const btn=qs('.day-collapse-btn[data-cid="'+id+'"]'); if(btn) btn.textContent=S_dayCollapsed[id]?'›':'‹';
+}
 function delDay(id){
   const d=S.days.find(x=>x.id===id); if(!d) return;
   d.items.filter(i=>i.type==='poi').forEach(i=>{ const p=S.pois.find(x=>x.id===i.id); if(p) p.dayIds=(p.dayIds||[]).filter(x=>x!==id); });
@@ -1018,13 +1033,15 @@ function renderDays(){
     });
     if(eating>0) costRows.push({l:'🍽️ Eating'+(eatingOverridden?' (custom)':' (default)'),c:eating,s:''});
     const ghosts=getGhostItemsForDay(di);
+    // Check if day has hotel/camping
+    const hasHotel=dpois.some(p=>isAccomCat(p.cat));
     let items='';
     if(!d.items.length && !ghosts.length) items='<div class="empty-day">Empty — assign POIs via ✏️ Edit</div>';
 
     // Ghost items (accommodation from previous day) — rendered first, not draggable above
     ghosts.forEach(g=>{
       const p=S.pois.find(x=>x.id===g.poiId); if(!p) return;
-      items+='<div class="day-item" style="opacity:.45;background:rgba(0,0,0,.04);border-style:dashed;cursor:default;" title="Starting point (from previous day)">'
+      items+='<div class="day-item day-item--hotel" style="opacity:.45;border-style:dashed;cursor:default;" title="Starting point (from previous day)">'
         +'<span style="font-size:.7rem;flex-shrink:0;">🔗</span>'
         +'<div class="dipin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
         +'<span class="diname" style="color:var(--muted);">'+esc(p.name)+' <span style="font-size:.58rem;">(carry-over)</span></span>'
@@ -1036,22 +1053,24 @@ function renderDays(){
       items+='<div class="day-dropzone" data-did="'+d.id+'" data-idx="'+idx+'"></div>';
       if(it.type==='poi'){
         const p=S.pois.find(x=>x.id===it.id); if(!p) return;
-        items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="poi" data-iid="'+p.id+'">'
+        const isHotel=isAccomCat(p.cat);
+        const itemCls=isHotel?'day-item day-item--hotel':'day-item day-item--poi';
+        items+='<div class="'+itemCls+'" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="poi" data-iid="'+p.id+'">'
           +'<span class="di-grip">⋮⋮</span>'
           +'<div class="dipin" style="background:'+p.color+'22;color:'+p.color+';">'+(CATS[p.cat]||'📍')+'</div>'
           +'<span class="diname" ondblclick="editPOI('+p.id+')" onclick="focusPOI('+p.id+')">'+esc(p.name)+'</span>'
           +(poiCostForDay(p)?'<span class="di-cost">$'+poiCostForDay(p).toFixed(2)+'</span>':'')
-          +'<button class="btn bg bic bsm" onclick="editPOI('+p.id+')" title="Edit">✏️</button>'
-          +'<button class="btn bg bic bsm" onclick="focusPOI('+p.id+')">👁</button>'
+          +'<button class="btn bic bsm day-item-edit-btn" onclick="editPOI('+p.id+')" title="Edit">✏️</button>'
+          +'<button class="btn bic bsm day-item-eye-btn" onclick="focusPOI('+p.id+')">👁</button>'
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
       } else if(it.type==='route'){
         const r=S.routes.find(x=>x.id===it.id); if(!r) return;
         const tot=routeCost(r);
-        items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="route" data-iid="'+r.id+'" style="background:rgba(29,86,212,.05);border-color:rgba(29,86,212,.2);">'
+        items+='<div class="day-item day-item--route" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="route" data-iid="'+r.id+'">'
           +'<span class="di-grip">⋮⋮</span><span style="flex-shrink:0;">'+(MI[r.mode]||'🛣️')+'</span>'
-          +'<span class="diname" style="color:var(--blue);" onclick="(function(){var r2=S.routes.find(x=>x.id==='+r.id+');if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
+          +'<span class="diname" onclick="(function(){var r2=S.routes.find(x=>x.id==='+r.id+');if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
           +(tot?'<span class="di-cost">$'+tot.toFixed(2)+'</span>':'')
-          +'<button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')" title="Edit">✏️</button>'
+          +'<button class="btn bic bsm day-item-edit-btn" onclick="openRouteEdit('+r.id+')" title="Edit">✏️</button>'
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
       } else if(it.type==='note'){
         items+='<div class="ndi"><div style="display:flex;align-items:flex-start;gap:5px;"><textarea rows="2" style="flex:1;" onchange="S.days.find(x=>x.id==='+d.id+').items['+idx+'].text=this.value">'+(it.text||'')+'</textarea><button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div></div>';
@@ -1067,11 +1086,19 @@ function renderDays(){
     const zoneColor=DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
     const eatPlaceholder=S.eatingDefault?'$'+S.eatingDefault+' (default)':'$0';
     const hidden=isDayHidden(d.id);
-    return '<div class="dayc" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
+    const collapsed=!!S_dayCollapsed[d.id];
+    const fdate=fmtDate(d.date);
+    const hotelWarn=!hasHotel?'<span class="day-hotel-warn" title="No hotel/accommodation for this day">⚠️🏨</span>':'';
+    return '<div class="dayc'+(collapsed?' dayc--collapsed':'')+'" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
       +'<div class="dayh"><div class="dayn-bubble" style="background:'+zoneColor+';">'+(di+1)+'</div>'
+      +'<div class="dayh-titles">'
       +'<input class="dayti" value="'+esc(d.title)+'" onchange="updDay('+d.id+',\'title\',this.value)">'
-      +'<input class="daydi" type="date"'+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value)">'
+      +(fdate?'<span class="daydi-label">'+fdate+'</span>':'')
+      +'<input class="daydi" type="date"'+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value);ra();" title="Edit date">'
+      +'</div>'
+      +hotelWarn
       +'<button class="btn bg bic bsm" onclick="setDayVisibility('+d.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show day':'Hide day')+'" style="font-size:.85rem;">'+(hidden?'👁‍🗨':'👁')+'</button>'
+      +'<button class="day-collapse-btn" data-cid="'+d.id+'" onclick="toggleDayCollapse('+d.id+')" title="'+(collapsed?'Expand':'Collapse')+'">'+(collapsed?'›':'‹')+'</button>'
       +'<button class="btn br bic bsm" onclick="delDay('+d.id+')">✕</button></div>'
       +'<div class="dayst"><div class="daystat">📍 <b>'+dpois.length+'</b></div>'+(km?'<div class="daystat">🛣️ <b>'+km.toFixed(0)+'km</b></div>':'')+(dur?'<div class="daystat">⏱ <b>'+fmtD(dur)+'</b></div>':'')+(dc?'<div class="daystat gold">💰 <b>$'+dc.toFixed(2)+'</b></div>':'')+'</div>'
       +'<div class="dayb">'+items+costSummary
