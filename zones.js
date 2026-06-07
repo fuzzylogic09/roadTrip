@@ -30,23 +30,16 @@ function latlngToPixel(ll){
   return [lp.x, lp.y];
 }
 
-/* --- Convex Hull (Graham scan) in pixel space --- */
-function cross(O, A, B){ return (A[0]-O[0])*(B[1]-O[1])-(A[1]-O[1])*(B[0]-O[0]); }
-
+/* --- Convex Hull (Graham scan) in 2D --- */
+function _cross(O,A,B){ return (A[0]-O[0])*(B[1]-O[1])-(A[1]-O[1])*(B[0]-O[0]); }
 function convexHull(pts){
-  if(pts.length < 3) return pts.slice();
-  const sorted = pts.slice().sort((a,b)=> a[0]!==b[0] ? a[0]-b[0] : a[1]-b[1]);
+  const n=pts.length;
+  if(n<2) return pts.slice();
+  const sorted=pts.slice().sort((a,b)=>a[0]!==b[0]?a[0]-b[0]:a[1]-b[1]);
   const lower=[];
-  for(const p of sorted){
-    while(lower.length>=2 && cross(lower[lower.length-2],lower[lower.length-1],p)<=0) lower.pop();
-    lower.push(p);
-  }
+  for(const p of sorted){ while(lower.length>=2&&_cross(lower[lower.length-2],lower[lower.length-1],p)<=0) lower.pop(); lower.push(p); }
   const upper=[];
-  for(let i=sorted.length-1;i>=0;i--){
-    const p=sorted[i];
-    while(upper.length>=2 && cross(upper[upper.length-2],upper[upper.length-1],p)<=0) upper.pop();
-    upper.push(p);
-  }
+  for(let i=sorted.length-1;i>=0;i--){ const p=sorted[i]; while(upper.length>=2&&_cross(upper[upper.length-2],upper[upper.length-1],p)<=0) upper.pop(); upper.push(p); }
   upper.pop(); lower.pop();
   return lower.concat(upper);
 }
@@ -57,18 +50,16 @@ function expandHull(hull, pad){
   const cx=hull.reduce((s,p)=>s+p[0],0)/hull.length;
   const cy=hull.reduce((s,p)=>s+p[1],0)/hull.length;
   return hull.map(([x,y])=>{
-    const dx=x-cx, dy=y-cy;
-    const d=Math.sqrt(dx*dx+dy*dy)||1;
+    const dx=x-cx, dy=y-cy, d=Math.sqrt(dx*dx+dy*dy)||1;
     return [x+dx/d*pad, y+dy/d*pad];
   });
 }
 
-/* Chaikin smoothing passes */
+/* Chaikin corner-cutting smoothing */
 function chaikin(pts, passes=2){
   let cur=pts;
   for(let p=0;p<passes;p++){
-    const next=[];
-    const n=cur.length;
+    const next=[], n=cur.length;
     for(let i=0;i<n;i++){
       const a=cur[i], b=cur[(i+1)%n];
       next.push([0.75*a[0]+0.25*b[0], 0.75*a[1]+0.25*b[1]]);
@@ -79,20 +70,40 @@ function chaikin(pts, passes=2){
   return cur;
 }
 
-function hullToPath(pts){
+function ptsToPath(pts){
   if(!pts.length) return '';
   return 'M'+pts[0][0]+','+pts[0][1]+pts.slice(1).map(([x,y])=>' L'+x+','+y).join('')+' Z';
 }
 
-/* For a single point, draw a small circle */
-function singlePointPath(px, py, r=28){
-  const n=32;
+/* Circle path around a single pixel point, with radius in pixels */
+function circlePath(cx, cy, r, n=48){
   const pts=[];
-  for(let i=0;i<n;i++){
-    const t=2*Math.PI*i/n;
-    pts.push([px+r*Math.cos(t), py+r*Math.sin(t)]);
+  for(let i=0;i<n;i++){ const t=2*Math.PI*i/n; pts.push([cx+r*Math.cos(t),cy+r*Math.sin(t)]); }
+  return ptsToPath(pts);
+}
+
+/* Stadium/capsule shape around two pixel points */
+function capsulePath(A, B, r, n=16){
+  const dx=B[0]-A[0], dy=B[1]-A[1], len=Math.sqrt(dx*dx+dy*dy)||1;
+  const ux=dx/len, uy=dy/len;   // unit along AB
+  const nx=-uy, ny=ux;           // unit normal
+  const pts=[];
+  for(let i=0;i<=n;i++){          // semicircle around B
+    const a=Math.PI/2 - Math.PI*i/n;
+    pts.push([B[0]+r*(ux*Math.cos(a)-ny*Math.sin(a)), B[1]+r*(uy*Math.cos(a)+nx*Math.sin(a))]);
   }
-  return hullToPath(pts);
+  for(let i=0;i<=n;i++){          // semicircle around A
+    const a=-Math.PI/2 - Math.PI*i/n;
+    pts.push([A[0]+r*(ux*Math.cos(a)-ny*Math.sin(a)), A[1]+r*(uy*Math.cos(a)+nx*Math.sin(a))]);
+  }
+  return ptsToPath(chaikin(pts,1));
+}
+
+/* Minimum pixel padding — scales with zoom so zones are always readable */
+function minPadPx(){
+  // Base 30px at zoom 10, grows slightly at lower zoom
+  const z=map.getZoom();
+  return Math.max(28, 28+(10-z)*4);
 }
 
 /* --- Debounced rAF zone refresh --- */
@@ -115,9 +126,6 @@ function scheduleZoneRefresh(){
   });
 }
 
-// Pixel padding around the tight convex hull (small value = tight zone)
-const ZONE_PAD_PX = 22;
-
 function refreshDayZones(){
   const svgEl = getZoneSvg();
   svgEl.innerHTML = '';
@@ -126,68 +134,75 @@ function refreshDayZones(){
   const container = map.getContainer();
   const W = container.clientWidth, H = container.clientHeight;
   const margin = 400;
+  const pad = minPadPx();
 
   S.days.forEach((d, di) => {
     if(isDayHidden(d.id)) return;
 
-    // Collect pixel-space points: POI positions + dense route samples
-    const seen=new Set(), geoPts=[];
+    // Collect all geo points for this day:
+    // 1. All POIs assigned to this day (via dayIds — robust even if d.items is stale)
+    // 2. Route endpoints and dense coordinate samples
+    const seen=new Set();
+    const poiPts=[];   // POI-only points (for centroid label)
+    const allPts=[];   // POI + route points (for hull)
 
-    d.items.forEach(it => {
-      if(it.type==='poi'){
-        const p=S.pois.find(x=>x.id===it.id);
-        if(p){
-          const k=p.lat.toFixed(5)+','+p.lng.toFixed(5);
-          if(!seen.has(k)){ seen.add(k); geoPts.push([p.lat,p.lng]); }
-        }
-      }
+    function addGeo(lat, lng, isPoi){
+      const k=lat.toFixed(4)+','+lng.toFixed(4);
+      if(seen.has(k)) return;
+      seen.add(k);
+      if(isPoi) poiPts.push([lat,lng]);
+      allPts.push([lat,lng]);
+    }
+
+    // Primary: POIs whose dayIds include this day
+    S.pois.forEach(p=>{
+      if((p.dayIds||[]).includes(d.id)) addGeo(p.lat,p.lng,true);
+    });
+
+    // Routes in d.items
+    d.items.forEach(it=>{
       if(it.type==='route'){
         const r=S.routes.find(x=>x.id===it.id);
-        if(r){
-          // Route endpoints
-          [r.fromId,r.toId].forEach(pid=>{
-            const ep=S.pois.find(x=>x.id===pid);
-            if(ep){
-              const k=ep.lat.toFixed(5)+','+ep.lng.toFixed(5);
-              if(!seen.has(k)){ seen.add(k); geoPts.push([ep.lat,ep.lng]); }
-            }
-          });
-          // All route coords (dense, for tight hull along the path)
-          if(r.coords && r.coords.length>1){
-            const step=Math.max(1, Math.floor(r.coords.length/40));
-            for(let i=0;i<r.coords.length;i+=step){
-              const c=r.coords[i];
-              const k=c[0].toFixed(4)+','+c[1].toFixed(4);
-              if(!seen.has(k)){ seen.add(k); geoPts.push(c); }
-            }
-            const last=r.coords[r.coords.length-1];
-            const lk=last[0].toFixed(4)+','+last[1].toFixed(4);
-            if(!seen.has(lk)){ seen.add(lk); geoPts.push(last); }
-          }
+        if(!r) return;
+        [r.fromId,r.toId].forEach(pid=>{
+          const ep=S.pois.find(x=>x.id===pid);
+          if(ep) addGeo(ep.lat,ep.lng,false);
+        });
+        if(r.coords&&r.coords.length>1){
+          const step=Math.max(1,Math.floor(r.coords.length/60));
+          for(let i=0;i<r.coords.length;i+=step) addGeo(r.coords[i][0],r.coords[i][1],false);
+          const last=r.coords[r.coords.length-1];
+          addGeo(last[0],last[1],false);
         }
       }
     });
-    if(!geoPts.length) return;
+
+    if(!allPts.length) return;
 
     // Convert to pixel coords
-    const pxPts = geoPts.map(g=>latlngToPixel(g));
+    const pxAll  = allPts.map(g=>latlngToPixel(g));
+    const pxPois = poiPts.map(g=>latlngToPixel(g));
 
     // Cull days entirely off-screen
-    const anyVisible = pxPts.some(([x,y])=> x>-margin && x<W+margin && y>-margin && y<H+margin);
+    const anyVisible = pxAll.some(([x,y])=>x>-margin&&x<W+margin&&y>-margin&&y<H+margin);
     if(!anyVisible) return;
 
-    // Build tight convex hull in pixel space, expand by small padding, smooth
+    // Build zone shape
     let pathD;
-    if(pxPts.length===1){
-      pathD = singlePointPath(pxPts[0][0], pxPts[0][1], ZONE_PAD_PX+8);
-    } else if(pxPts.length===2){
-      // Degenerate: make a thin oval around the two points
-      const expanded = expandHull(pxPts, ZONE_PAD_PX);
-      pathD = hullToPath(chaikin(expanded, 3));
+    if(pxAll.length===1){
+      pathD = circlePath(pxAll[0][0], pxAll[0][1], pad);
+    } else if(pxAll.length===2){
+      pathD = capsulePath(pxAll[0], pxAll[1], pad);
     } else {
-      const hull = convexHull(pxPts);
-      const expanded = expandHull(hull, ZONE_PAD_PX);
-      pathD = hullToPath(chaikin(expanded, 2));
+      const hull = convexHull(pxAll);
+      // Ensure hull has at least 3 unique points for a valid polygon
+      if(hull.length<3){
+        pathD = hull.length===2
+          ? capsulePath(hull[0],hull[1],pad)
+          : circlePath(hull[0][0],hull[0][1],pad);
+      } else {
+        pathD = ptsToPath(chaikin(expandHull(hull, pad), 2));
+      }
     }
     if(!pathD) return;
 
@@ -201,7 +216,7 @@ function refreshDayZones(){
     const filter=document.createElementNS(ns,'filter');
     filter.setAttribute('id',fid); filter.setAttribute('x','-30%'); filter.setAttribute('y','-30%');
     filter.setAttribute('width','160%'); filter.setAttribute('height','160%');
-    const feG=document.createElementNS(ns,'feGaussianBlur'); feG.setAttribute('stdDeviation','6');
+    const feG=document.createElementNS(ns,'feGaussianBlur'); feG.setAttribute('stdDeviation','7');
     filter.appendChild(feG); defs.appendChild(filter); svgEl.appendChild(defs);
 
     // Soft fill
@@ -218,12 +233,9 @@ function refreshDayZones(){
     stroke.setAttribute('stroke-linecap','round'); stroke.setAttribute('stroke-linejoin','round');
     svgEl.appendChild(stroke);
 
-    // Zone title at centroid of POI stop points
+    // Zone title at centroid of POI points (or all points if no POI centroids)
     if(CFG.showZoneTitles){
-      const stopPts = pxPts.filter((_,i)=>{
-        const it=d.items[i]; return it && it.type==='poi';
-      });
-      const centSrc = stopPts.length ? stopPts : pxPts;
+      const centSrc = pxPois.length ? pxPois : pxAll;
       const centX=centSrc.reduce((s,p)=>s+p[0],0)/centSrc.length;
       const centY=centSrc.reduce((s,p)=>s+p[1],0)/centSrc.length;
       const fd=fmtDate(d.date);
