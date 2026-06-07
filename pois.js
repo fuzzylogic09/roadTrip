@@ -140,16 +140,13 @@ function toggleLock(id){ const p=S.pois.find(x=>x.id===id); if(!p) return; p.loc
 function editPOI(id){
   const p=S.pois.find(x=>x.id===id); if(!p) return;
   S.editing=id;
-  qs('#m-name').value=p.name; qs('#m-desc').value=p.desc||''; qs('#m-cat').value=p.cat; qs('#m-rat').value=p.rating||'';
-  qs('#m-tags').value=(p.tags||[]).join(', '); qs('#m-cost').value=p.cost||'';
+  qs('#m-name').value=p.name; qs('#m-desc').value=p.desc||''; qs('#m-cat').value=p.cat;
+  qs('#m-cost').value=p.cost||'';
   if(p.colorLocked) selCol(p.color); else { S.col=p.color; selColAuto(); }
-  renderLinks(p.links||[]);
   qs('#m-hd').textContent='Edit POI'; qs('#m-ico').textContent=CATS[p.cat]||'📍';
-  // cost type
   setCostType(p.costType||'total');
   refMDay(); renderMDayCheckboxes(p.dayIds||[]);
   updateCostTypeUI();
-  // Propagate checkbox — only relevant for accommodation categories
   const propRow=qs('#m-propagate-row');
   if(propRow){ propRow.style.display=isAccomCat(p.cat)?'flex':'none'; }
   const propCb=qs('#m-propagate');

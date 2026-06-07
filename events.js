@@ -49,7 +49,7 @@ qs('#m-cat').addEventListener('change',ev=>{
   if(propRow) propRow.style.display=isAccomCat(ev.target.value)?'flex':'none';
 });
 qsa('.csw').forEach(s=>s.addEventListener('click',()=>selCol(s.dataset.c)));
-qs('#btn-alink').addEventListener('click',()=>{ const el=qs('#m-links'); const row=document.createElement('div'); row.className='lrow'; row.innerHTML='<input class="inp" style="width:76px;flex-shrink:0;" placeholder="Label"><input class="inp" style="flex:1;" placeholder="https://..."><button class="btn br bic bsm" onclick="this.parentNode.remove()">✕</button>'; el.appendChild(row); });
+// #btn-alink removed from form
 // Cost type computed update on cost input
 qs('#m-cost').addEventListener('input', updateCostTypeUI);
 qs('#m-save').addEventListener('click',()=>{
@@ -58,7 +58,13 @@ qs('#m-save').addEventListener('click',()=>{
   const propCb=qs('#m-propagate');
   const propagateAccom=propCb?propCb.checked:false;
   const poiColorLocked = qsa('.csw[data-c].on').length > 0;
-  const data={name,desc:qs('#m-desc').value,cat:qs('#m-cat').value,rating:qs('#m-rat').value,tags:qs('#m-tags').value.split(',').map(t=>t.trim()).filter(Boolean),links:getLinks(),color:S.col,dayIds:newDayIds,cost:+(qs('#m-cost').value||0),costType:S.costType,propagateAccom,colorLocked:poiColorLocked};
+  // Preserve existing rating/tags/links from the POI being edited (fields removed from form)
+  const existingPoi = S.editing ? S.pois.find(x=>x.id===S.editing) : null;
+  const data={name,desc:qs('#m-desc').value,cat:qs('#m-cat').value,
+    rating:existingPoi?existingPoi.rating:'',
+    tags:existingPoi?existingPoi.tags:[],
+    links:existingPoi?existingPoi.links:[],
+    color:S.col,dayIds:newDayIds,cost:+(qs('#m-cost').value||0),costType:S.costType,propagateAccom,colorLocked:poiColorLocked};
   if(S.editing){ const p=S.pois.find(x=>x.id===S.editing); if(p){ p.name=data.name; p.desc=data.desc; p.cat=data.cat; p.rating=data.rating; p.tags=data.tags; p.links=data.links; p.color=data.color; p.colorLocked=poiColorLocked; p.cost=data.cost; p.costType=data.costType; p.propagateAccom=data.propagateAccom; p.marker.setIcon(mkPin(getPoiColor(p),CATS[p.cat]||'📍')); setPOIDays(p,newDayIds); toast('POI updated','ok'); } }
   else{ if(!S.pendLL){ closeModal(); return; } addPOI(S.pendLL,data); map.flyTo([S.pendLL.lat,S.pendLL.lng],Math.max(map.getZoom(),14)); toast('POI added!','ok'); }
   closeModal(); qs('#psrch').value=''; ra();

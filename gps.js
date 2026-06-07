@@ -24,13 +24,13 @@ function pickSR(lat,lon,name){ qs('#srdr').style.display='none'; qs('#psrch').va
 function refMDay(){ const o='<option value="">— Not assigned —</option>'+S.days.map(d=>'<option value="'+d.id+'">'+esc(d.title)+(d.date?' ('+d.date+')':'')+'</option>').join(''); const mdEl=qs('#m-day'); if(mdEl) mdEl.innerHTML=o; }
 function renderMDayCheckboxes(selectedIds){
   const el=qs('#m-days-list'); if(!el) return;
-  if(!S.days.length){ el.innerHTML='<div style="font-size:.65rem;color:var(--muted);">No days yet.</div>'; return; }
+  if(!S.days.length){ el.innerHTML=''; updateDayBadges(); return; }
   el.innerHTML=S.days.map((d,di)=>{
     const checked=selectedIds.includes(d.id)?'checked':'';
     const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
-    return'<label class="mday-row"><input type="checkbox" value="'+d.id+'" '+checked+' onchange="updateCostTypeUI()"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+c+';flex-shrink:0;"></span>'+esc(d.title)+(d.date?' <span style="color:var(--muted2);font-size:.6rem;">'+d.date+'</span>':'')+'</label>';
+    return'<label class="mday-row" style="display:none;"><input type="checkbox" value="'+d.id+'" '+checked+' onchange="updateCostTypeUI();updateDayBadges()"></label>';
   }).join('');
-  updateCostTypeUI();
+  updateCostTypeUI(); updateDayBadges();
 }
 function getSelectedDayIds(){ return qsa('#m-days-list input[type=checkbox]:checked').map(cb=>Number(cb.value)); }
 
@@ -55,9 +55,9 @@ function updateCostTypeUI(){
 function openModal(ll,name){
   S.pendLL=ll;
   if(!S.editing){
-    qs('#m-name').value=name||''; qs('#m-desc').value=''; qs('#m-cat').value='general'; qs('#m-rat').value='';
-    qs('#m-tags').value=''; qs('#m-cost').value='';
-    selCol('#c94f14'); renderLinks([]); qs('#m-hd').textContent='New POI'; qs('#m-ico').textContent='📍';
+    qs('#m-name').value=name||''; qs('#m-desc').value=''; qs('#m-cat').value='general';
+    qs('#m-cost').value='';
+    selCol('#c94f14'); qs('#m-hd').textContent='New POI'; qs('#m-ico').textContent='📍';
     setCostType('total'); renderMDayCheckboxes([]);
     const propRow=qs('#m-propagate-row'); if(propRow) propRow.style.display='none';
     const propCb=qs('#m-propagate'); if(propCb) propCb.checked=true;
@@ -66,8 +66,54 @@ function openModal(ll,name){
   qs('#mbk').classList.add('on'); setTimeout(()=>qs('#m-name').focus(),80);
 }
 function closeModal(){ qs('#mbk').classList.remove('on'); S.editing=null; restoreDrawer(); }
-function selCol(c){ S.col=c; qsa('.csw').forEach(s=>s.classList.toggle('on',s.dataset.c===c)); const h=qs('#m-color-hint'); if(h) h.textContent='(custom)'; }
-function selColAuto(){ qsa('.csw[data-c]').forEach(s=>s.classList.remove('on')); const h=qs('#m-color-hint'); if(h) h.textContent='(auto from day)'; }
+function selCol(c){
+  S.col=c;
+  qsa('.csw').forEach(s=>s.classList.toggle('on',s.dataset.c===c));
+  const h=qs('#m-color-hint'); if(h) h.textContent='(custom)';
+  const prev=qs('#m-color-preview'); if(prev) prev.style.background=c;
+}
+function selColAuto(){
+  qsa('.csw[data-c]').forEach(s=>s.classList.remove('on'));
+  const h=qs('#m-color-hint'); if(h) h.textContent='(auto depuis le jour)';
+  const prev=qs('#m-color-preview'); if(prev) prev.style.background='var(--border2)';
+}
+
+const FORM_COLORS=['#c94f14','#1d56d4','#15803d','#d4920a','#7c22d4','#c81e1e','#0e7eb5','#b01e6a','#e91e8c','#00796b'];
+function openFormColorPicker(){
+  const m=qs('#form-cpick-modal'); if(!m) return;
+  qs('#form-cpick-swatches').innerHTML=FORM_COLORS.map(c=>'<div class="cpick-swatch'+(S.col===c?' cpick-on':'')+'" style="background:'+c+';" onclick="applyFormColor(\''+c+'\')"></div>').join('');
+  qs('#form-cpick-hex').value='';
+  m.style.display='flex';
+}
+function applyFormColor(c){ selCol(c); qs('#form-cpick-hex').value=c; qs('#form-cpick-swatches').querySelectorAll('.cpick-swatch').forEach(s=>s.classList.toggle('cpick-on',s.style.background===c||s.style.backgroundColor===c)); }
+function closeFormColorPicker(){ const m=qs('#form-cpick-modal'); if(m) m.style.display='none'; }
+
+function updateDayBadges(){
+  const badges=qs('#m-days-badges'); if(!badges) return;
+  const ids=getSelectedDayIds();
+  if(!ids.length){ badges.innerHTML='<span style="font-size:.63rem;color:var(--muted);">Aucun jour</span>'; return; }
+  badges.innerHTML=ids.map(id=>{ const d=S.days.find(x=>x.id===id); if(!d) return''; const di=S.days.indexOf(d); const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length]; return'<span style="background:'+c+';color:#fff;border-radius:8px;padding:1px 7px;font-size:.6rem;font-weight:700;">'+esc(d.title)+'</span>'; }).join('');
+}
+function openFormDaysModal(){
+  const m=qs('#form-days-modal'); if(!m) return;
+  const selectedIds=getSelectedDayIds();
+  qs('#form-days-list').innerHTML=S.days.map((d,di)=>{
+    const checked=selectedIds.includes(d.id)?'checked':'';
+    const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+    const fd=fmtDate(d.date);
+    return'<label class="dayassign-row">'
+      +'<input type="checkbox" value="'+d.id+'" '+checked+' style="accent-color:'+c+';cursor:pointer;width:16px;height:16px;" onchange="syncFormDay('+d.id+',this.checked)">'
+      +'<span class="dayassign-dot" style="background:'+c+';"></span>'
+      +'<span class="dayassign-name">'+esc(d.title)+(fd?' <span style="color:var(--muted2);font-size:.6rem;">'+fd+'</span>':'')+'</span>'
+      +'</label>';
+  }).join('');
+  m.style.display='flex';
+}
+function syncFormDay(dayId, checked){
+  const cb=qs('#m-days-list input[type=checkbox][value="'+dayId+'"]'); if(cb) cb.checked=checked;
+  updateCostTypeUI(); updateDayBadges();
+}
+function closeFormDaysModal(){ const m=qs('#form-days-modal'); if(m) m.style.display='none'; updateDayBadges(); }
 function selRtColAuto(){ qsa('.csw[data-rc]').forEach(s=>s.classList.remove('on')); }
 function selRtCol2Auto(){ qsa('.csw[data-rc2]').forEach(s=>s.classList.remove('on')); }
 function renderLinks(links){ const el=qs('#m-links'); el.innerHTML=''; (links.length?links:[{label:'',url:''}]).forEach(lk=>{ const row=document.createElement('div'); row.className='lrow'; row.innerHTML='<input class="inp" style="width:76px;flex-shrink:0;" placeholder="Label" value="'+(lk.label||'')+'"><input class="inp" style="flex:1;" placeholder="https://..." value="'+(lk.url||'')+'"><button class="btn br bic bsm" onclick="this.parentNode.remove()">✕</button>'; el.appendChild(row); }); }

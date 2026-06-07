@@ -118,8 +118,8 @@
       <button class="btn ba bsm" id="btn-addd" style="flex:1;">+ Add Day</button>
       <button class="btn bg bic bsm" id="btn-days-show-all" onclick="setAllDaysVisibility(true)" title="Show all days" style="font-size:.85rem;">👁</button>
       <button class="btn bg bic bsm" id="btn-days-hide-all" onclick="setAllDaysVisibility(false)" title="Hide all days" style="font-size:.85rem;">👁‍🗨</button>
-      <button class="btn bg bic bsm" onclick="setAllDaysCollapsed(false)" title="Expand all days" style="font-size:.75rem;">▼▼</button>
-      <button class="btn bg bic bsm" onclick="setAllDaysCollapsed(true)" title="Collapse all days" style="font-size:.75rem;">▶▶</button>
+      <button class="btn bg bic bsm" onclick="setAllDaysCollapsed(false)" title="Expand all days" style="font-size:.82rem;font-weight:700;">−−</button>
+      <button class="btn bg bic bsm" onclick="setAllDaysCollapsed(true)" title="Collapse all days" style="font-size:.82rem;font-weight:700;">++</button>
     </div>
     <div class="pbd" id="day-list"></div>
   </div>
@@ -327,23 +327,15 @@
   <h2><span id="m-ico">📍</span><span id="m-hd">New POI</span></h2>
   <div class="fld"><label class="lbl">Name *</label><input class="inp" id="m-name" type="text" placeholder="Place name..."></div>
   <div class="fld"><label class="lbl">Notes</label><textarea class="inp" id="m-desc" rows="3" placeholder="Opening hours, tips..."></textarea></div>
-  <div class="fr2">
-    <div><label class="lbl">Category</label>
-      <select class="inp" id="m-cat">
-        <option value="general">📍 General</option><option value="hotel">🏨 Hotel</option>
-        <option value="camping">⛺ Camping</option>
-        <option value="restaurant">🍽️ Restaurant</option><option value="attraction">🎯 Attraction</option>
-        <option value="hike">🥾 Hike</option><option value="view">🌄 Viewpoint</option>
-        <option value="gas">⛽ Gas</option><option value="parking">🅿️ Parking</option>
-        <option value="info">ℹ️ Info</option>
-      </select>
-    </div>
-    <div><label class="lbl">Rating</label>
-      <select class="inp" id="m-rat">
-        <option value="">—</option><option value="5">★★★★★</option><option value="4">★★★★☆</option>
-        <option value="3">★★★☆☆</option><option value="2">★★☆☆☆</option><option value="1">★☆☆☆☆</option>
-      </select>
-    </div>
+  <div class="fld"><label class="lbl">Category</label>
+    <select class="inp" id="m-cat">
+      <option value="general">📍 General</option><option value="hotel">🏨 Hotel</option>
+      <option value="camping">⛺ Camping</option>
+      <option value="restaurant">🍽️ Restaurant</option><option value="attraction">🎯 Attraction</option>
+      <option value="hike">🥾 Hike</option><option value="view">🌄 Viewpoint</option>
+      <option value="gas">⛽ Gas</option><option value="parking">🅿️ Parking</option>
+      <option value="info">ℹ️ Info</option>
+    </select>
   </div>
   <!-- Propagate to next day — shown only for hotel/camping -->
   <div id="m-propagate-row" class="tog-row" style="display:none;margin-bottom:7px;border-radius:var(--rs);padding:7px 10px;background:rgba(29,86,212,.05);border:1px solid rgba(29,86,212,.15);">
@@ -365,30 +357,64 @@
       <div id="ctt-computed" style="font-size:.62rem;color:var(--gold);margin-top:3px;font-weight:700;"></div>
     </div>
   </div>
+  <!-- Color: compact circle + modal picker -->
   <div class="fld">
-    <label class="lbl">Assign to Days</label>
-    <div id="m-days-list"><div style="font-size:.65rem;color:var(--muted);">No days yet.</div></div>
-    <select id="m-day" style="display:none;"></select>
-  </div>
-  <div class="fld"><label class="lbl">Color <span id="m-color-hint" style="font-size:.6rem;color:var(--muted);font-weight:400;">(auto from day)</span></label>
-    <div class="crow">
-      <div class="csw" style="background:#c94f14" data-c="#c94f14"></div>
-      <div class="csw" style="background:#1d56d4" data-c="#1d56d4"></div>
-      <div class="csw" style="background:#15803d" data-c="#15803d"></div>
-      <div class="csw" style="background:#d4920a" data-c="#d4920a"></div>
-      <div class="csw" style="background:#7c22d4" data-c="#7c22d4"></div>
-      <div class="csw" style="background:#c81e1e" data-c="#c81e1e"></div>
-      <div class="csw" style="background:#0e7eb5" data-c="#0e7eb5"></div>
-      <div class="csw" style="background:#b01e6a" data-c="#b01e6a"></div>
-      <button class="btn bg bsm" onclick="selColAuto()" title="Auto-color from assigned day" style="font-size:.63rem;padding:2px 6px;white-space:nowrap;">↩ Auto</button>
+    <label class="lbl">Couleur</label>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:3px;">
+      <span id="m-color-preview" style="width:22px;height:22px;border-radius:50%;background:#c94f14;border:2px solid var(--border2);cursor:pointer;flex-shrink:0;display:inline-block;" onclick="openFormColorPicker()" title="Choisir une couleur"></span>
+      <span id="m-color-hint" style="font-size:.63rem;color:var(--muted);">(auto depuis le jour)</span>
+      <button class="btn bg bsm" onclick="openFormColorPicker()" style="font-size:.63rem;">✎ Choisir</button>
+      <button class="btn bg bsm" onclick="selColAuto()" style="font-size:.63rem;">↩ Auto</button>
+    </div>
+    <!-- Hidden swatches still needed for selCol() logic -->
+    <div style="display:none;">
+      <div class="csw" data-c="#c94f14"></div><div class="csw" data-c="#1d56d4"></div>
+      <div class="csw" data-c="#15803d"></div><div class="csw" data-c="#d4920a"></div>
+      <div class="csw" data-c="#7c22d4"></div><div class="csw" data-c="#c81e1e"></div>
+      <div class="csw" data-c="#0e7eb5"></div><div class="csw" data-c="#b01e6a"></div>
     </div>
   </div>
-  <div class="fld"><label class="lbl">Links / URLs</label>
-    <div id="m-links"></div>
-    <button class="btn bg bsm" id="btn-alink" style="margin-top:4px;">+ Add link</button>
+  <!-- Assign to Days: compact + modal -->
+  <div class="fld">
+    <label class="lbl">Jours assignés</label>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap;">
+      <div id="m-days-badges" style="display:flex;gap:4px;flex-wrap:wrap;flex:1;"></div>
+      <button class="btn bg bsm" onclick="openFormDaysModal()" style="font-size:.63rem;white-space:nowrap;">📅 Modifier</button>
+    </div>
+    <!-- Hidden checkboxes read by getSelectedDayIds() -->
+    <div id="m-days-list" style="display:none;"></div>
+    <select id="m-day" style="display:none;"></select>
   </div>
-  <div class="fld"><label class="lbl">Tags (comma separated)</label><input class="inp" id="m-tags" placeholder="museum, free..."></div>
+  <!-- Hidden fields kept for save logic (rating, tags, links preserved in data) -->
+  <select id="m-rat" style="display:none;"></select>
+  <input id="m-tags" style="display:none;">
+  <div id="m-links" style="display:none;"></div>
   <div class="mfoot"><button class="btn bg" id="m-cancel">Cancel</button><button class="btn ba" id="m-save">Save POI</button></div>
+</div></div>
+
+<!-- Form Days Modal (for POI edit form) -->
+<div id="form-days-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px);padding:13px;" onclick="if(event.target===this)closeFormDaysModal()">
+<div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:16px;width:100%;max-width:320px;box-shadow:var(--sh2);">
+  <h2 style="font-family:var(--head);font-weight:900;font-size:.9rem;margin-bottom:10px;">📅 Assigner aux jours</h2>
+  <div id="form-days-list" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;"></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+    <button class="btn ba" onclick="closeFormDaysModal()">OK</button>
+  </div>
+</div></div>
+
+<!-- Form Color Picker Modal -->
+<div id="form-cpick-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px);padding:13px;" onclick="if(event.target===this)closeFormColorPicker()">
+<div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:16px;width:100%;max-width:300px;box-shadow:var(--sh2);">
+  <h2 style="font-family:var(--head);font-weight:900;font-size:.9rem;margin-bottom:12px;">🎨 Couleur du POI</h2>
+  <div id="form-cpick-swatches" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;"></div>
+  <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">
+    <label style="font-size:.65rem;font-weight:700;color:var(--muted2);white-space:nowrap;">Hex :</label>
+    <input class="inp" id="form-cpick-hex" type="text" placeholder="#c94f14" style="flex:1;font-size:.72rem;" oninput="if(this.value.match(/^#[0-9a-fA-F]{6}$/))applyFormColor(this.value)">
+  </div>
+  <div style="display:flex;gap:6px;justify-content:flex-end;">
+    <button class="btn bg" onclick="closeFormColorPicker()">Fermer</button>
+    <button class="btn bg bsm" onclick="selColAuto();closeFormColorPicker()">↩ Auto</button>
+  </div>
 </div></div>
 
 <!-- Route Edit Modal -->
