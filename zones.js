@@ -203,7 +203,9 @@ function refreshDayZones(){
           ? capsulePath(hull[0],hull[1],pad)
           : circlePath(hull[0][0],hull[0][1],pad);
       } else {
-        pathD = ptsToPath(chaikin(expandHull(hull, pad), 2));
+        // Smooth first, then expand — Chaikin pulls corners inward so expand last
+        // ensures the final shape always fully contains the original POI positions
+        pathD = ptsToPath(expandHull(chaikin(hull, 2), pad));
       }
     }
     if(!pathD) return;

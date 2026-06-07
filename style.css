@@ -222,9 +222,9 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .resto-total{background:rgba(21,128,61,.1);border:1px solid rgba(21,128,61,.22);border-radius:var(--rs);padding:6px 9px;margin-top:7px;font-size:.74rem;font-weight:700;color:var(--green);display:flex;justify-content:space-between;align-items:center;}
 
 /* ===== DAY CARDS ===== */
-.dayc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:18px;overflow:hidden;box-shadow:var(--sh);}
+.dayc{background:color-mix(in srgb,var(--day-col,var(--surf2)) 8%,var(--surf2));border:1px solid color-mix(in srgb,var(--day-col,var(--border)) 30%,var(--border));border-radius:var(--r);margin-bottom:18px;overflow:hidden;box-shadow:var(--sh);}
 .dayc.dover{border-color:var(--acc2);background:rgba(212,146,10,.05);}
-.dayh{display:flex;align-items:center;gap:5px;padding:7px 10px;background:var(--surf3);border-bottom:1px solid var(--border);}
+.dayh{display:flex;align-items:center;gap:5px;padding:7px 10px;background:color-mix(in srgb,var(--day-col,var(--surf3)) 14%,var(--surf3));border-bottom:1px solid color-mix(in srgb,var(--day-col,var(--border)) 25%,var(--border));}
 .dayh-titles{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0;}
 .dayn-bubble{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--acc2);color:#fff;font-family:var(--head);font-weight:900;font-size:.72rem;flex-shrink:0;}
 .dayti{width:100%;background:transparent;border:none;color:var(--text);font-family:var(--font);font-size:.75rem;font-weight:700;outline:none;}

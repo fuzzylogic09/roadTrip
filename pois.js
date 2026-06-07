@@ -71,9 +71,9 @@ function popH(p){
   const costStr = p.costType==='perday' && (p.dayIds||[]).length>1
     ? '$'+p.cost.toFixed(2)+'/day × '+(p.dayIds||[]).length+' = $'+eff.toFixed(2)
     : '$'+eff.toFixed(2);
-  const assignedDays=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); return d?esc(d.title):null; }).filter(Boolean);
+  const assignedDays=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); if(!d) return null; const fd=fmtDate(d.date); return {title:esc(d.title),date:fd}; }).filter(Boolean);
   const dayBadge=assignedDays.length
-    ? assignedDays.map(t=>'<span style="background:var(--surf3);border:1px solid var(--border2);border-radius:8px;padding:1px 6px;font-size:.6rem;font-weight:700;">'+t+'</span>').join(' ')
+    ? assignedDays.map(({title,date})=>'<span style="background:var(--surf3);border:1px solid var(--border2);border-radius:8px;padding:1px 6px;font-size:.6rem;font-weight:700;">'+title+(date?' <span style="font-weight:400;color:var(--muted2);">'+date+'</span>':'')+'</span>').join(' ')
     : '<span style="font-size:.6rem;color:var(--muted);">No day assigned</span>';
   const poiColor=getPoiColor(p);
   return '<div class="pt" style="display:flex;align-items:center;gap:6px;">'
@@ -163,10 +163,19 @@ function delPOI(id){
 }
 function focusPOI(id){ const p=S.pois.find(x=>x.id===id); if(!p) return; closeDrawerMobile(); map.flyTo([p.lat,p.lng],16,{duration:.7}); setTimeout(()=>p.marker.fire('click'),750); }
 
+let _hideUnusedPOIs=false;
+function toggleHideUnusedPOIs(){
+  _hideUnusedPOIs=!_hideUnusedPOIs;
+  const btn=qs('#btn-hide-unused');
+  if(btn) btn.textContent=_hideUnusedPOIs?'👁 Show all POIs':'👁 Hide unassigned POIs';
+  renderPOIs();
+}
+
 function renderPOIs(){
   const el=qs('#poi-list'); qs('#pcnt').textContent=S.pois.length;
   const vis=S.pois
     .filter(p=>S.fcat==='all'||p.cat===S.fcat)
+    .filter(p=>!_hideUnusedPOIs||(p.dayIds&&p.dayIds.length>0))
     .slice()
     .sort((a,b)=>a.name.localeCompare(b.name,'fr',{sensitivity:'base'}));
 
@@ -380,7 +389,8 @@ function renderDays(){
     const collapsed=!!S.dayCollapsed[d.id];
     const fdate=fmtDate(d.date);
     const hotelWarn=!hasHotel?'<span class="day-hotel-warn" title="No hotel/accommodation for this day">⚠️🏨</span>':'';
-    return '<div class="dayc'+(collapsed?' dayc--collapsed':'')+'" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
+    const cardStyle='--day-col:'+zoneColor+';'+(hidden?'opacity:.45;':'');
+    return '<div class="dayc'+(collapsed?' dayc--collapsed':'')+'" data-dcid="'+d.id+'" style="'+cardStyle+'">'
       +'<div class="dayh">'
       +'<div class="dayn-bubble" data-did="'+d.id+'" style="background:'+zoneColor+';cursor:pointer;" title="Click to change day color" onclick="qs(\'#dclr-'+d.id+'\').click()">'+(di+1)+'</div>'
       +'<input type="color" id="dclr-'+d.id+'" value="'+zoneColor+'" style="display:none;width:0;height:0;padding:0;border:0;" oninput="setDayColor('+d.id+',this.value)">'
