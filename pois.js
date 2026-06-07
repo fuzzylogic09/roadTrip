@@ -67,43 +67,75 @@ function quickTogglePOIDay(poiId, dayId, add){
   toast((add?'📅 Added to ':'📅 Removed from ')+(S.days.find(x=>x.id===dayId)||{title:'?'}).title,'ok');
 }
 function popH(p){
-  const stars=p.rating?'★'.repeat(+p.rating)+'☆'.repeat(5-+p.rating):'';
-  const links=(p.links||[]).filter(l=>l.url).map(l=>'<a class="lchip" href="'+l.url+'" target="_blank">🔗 '+(l.label||l.url.slice(0,20))+'</a>').join(' ');
-  const tags=(p.tags||[]).map(t=>'<span class="tag">'+t+'</span>').join('');
-  const dayNames=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); return d?esc(d.title):null; }).filter(Boolean);
   const eff=poiEffectiveCost(p);
   const costStr = p.costType==='perday' && (p.dayIds||[]).length>1
     ? '$'+p.cost.toFixed(2)+'/day × '+(p.dayIds||[]).length+' = $'+eff.toFixed(2)
     : '$'+eff.toFixed(2);
-  // Quick day-assign: checkboxes for each day
-  const dayCheckboxes=S.days.length?
-    '<div style="margin-top:5px;">'
-    +'<div style="font-size:.6rem;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:3px;">📅 Assign to days</div>'
-    +'<div style="display:flex;flex-direction:column;gap:3px;max-height:90px;overflow-y:auto;">'
-    +S.days.map((d,di)=>{
-      const checked=(p.dayIds||[]).includes(d.id);
-      const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
-      return'<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:.68rem;">'
-        +'<input type="checkbox" '+(checked?'checked':'')+' style="accent-color:'+c+';cursor:pointer;" onchange="quickTogglePOIDay('+p.id+','+d.id+',this.checked)">'
-        +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+c+';flex-shrink:0;"></span>'
-        +esc(d.title)+(d.date?' <span style="color:var(--muted2);">'+d.date+'</span>':'')
-        +'</label>';
-    }).join('')
-    +'</div></div>'
-    :'';
-  return '<div class="pt">'+(CATS[p.cat]||'📍')+' '+esc(p.name)+'</div>'
-    +(stars?'<div class="pr">'+stars+'</div>':'')
+  const assignedDays=(p.dayIds||[]).map(did=>{ const d=S.days.find(x=>x.id===did); return d?esc(d.title):null; }).filter(Boolean);
+  const dayBadge=assignedDays.length
+    ? assignedDays.map(t=>'<span style="background:var(--surf3);border:1px solid var(--border2);border-radius:8px;padding:1px 6px;font-size:.6rem;font-weight:700;">'+t+'</span>').join(' ')
+    : '<span style="font-size:.6rem;color:var(--muted);">No day assigned</span>';
+  const poiColor=getPoiColor(p);
+  return '<div class="pt" style="display:flex;align-items:center;gap:6px;">'
+    +'<span>'+(CATS[p.cat]||'📍')+' '+esc(p.name)+'</span>'
+    +'<span class="pop-color-dot" style="background:'+poiColor+';width:12px;height:12px;border-radius:50%;flex-shrink:0;cursor:pointer;border:2px solid rgba(0,0,0,.15);display:inline-block;" onclick="openPoiColorPicker('+p.id+')" title="Change color"></span>'
+    +'</div>'
     +(eff?'<div class="pr">💰 <b style="color:var(--gold);">'+costStr+'</b></div>':'')
     +(p.desc?'<div class="pd">'+esc(p.desc)+'</div>':'')
-    +dayCheckboxes
-    +(links?'<div class="pr" style="margin-top:4px;">'+links+'</div>':'')
-    +(tags?'<div class="pr">'+tags+'</div>':'')
+    +'<div class="pr pop-day-row" style="margin-top:4px;gap:5px;align-items:center;">'
+    +'<span style="font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);">📅</span>'
+    +dayBadge
+    +(S.days.length?'<button class="btn bg bsm" style="font-size:.6rem;padding:1px 6px;" onclick="openDayAssignModal('+p.id+')">✎</button>':'')
+    +'</div>'
     +'<div class="pop-photos"></div>'
     +'<div class="pr" style="font-size:.61rem;color:var(--muted);margin-top:2px;">'+p.lat.toFixed(5)+', '+p.lng.toFixed(5)+' · '+(p.locked?'🔒':'🔓')+'</div>'
     +'<div class="pa"><button class="btn bg bsm" onclick="editPOI('+p.id+')">✏️ Edit</button>'
     +'<button class="btn bg bsm" onclick="toggleLock('+p.id+')">'+(p.locked?'🔓 Unlock':'🔒 Lock')+'</button>'
     +'<button class="btn br bsm" onclick="delPOI('+p.id+')">🗑</button></div>';
 }
+
+const POI_COLORS=['#c94f14','#1d56d4','#15803d','#d4920a','#7c22d4','#c81e1e','#0e7eb5','#b01e6a','#e91e8c','#00796b'];
+
+function openPoiColorPicker(poiId){
+  const p=S.pois.find(x=>x.id===poiId); if(!p) return;
+  const modal=qs('#cpick-modal'); if(!modal) return;
+  qs('#cpick-poi-id').value=poiId;
+  const current=getPoiColor(p);
+  qs('#cpick-swatches').innerHTML=POI_COLORS.map(c=>'<div class="cpick-swatch'+(c===current?' cpick-on':'')+'" style="background:'+c+';" onclick="setPoiColorFromPicker('+poiId+',\''+c+'\')"></div>').join('');
+  qs('#cpick-hex').value=p.colorLocked?current:'';
+  modal.style.display='flex';
+}
+
+function setPoiColorFromPicker(poiId,color){
+  const p=S.pois.find(x=>x.id===poiId); if(!p) return;
+  p.color=color; p.colorLocked=true;
+  if(p.marker) p.marker.setIcon(mkPin(color,CATS[p.cat]||'📍'));
+  if(p.marker&&p.marker.getPopup()&&p.marker.getPopup().isOpen()) p.marker.setPopupContent(popH(p));
+  qs('#cpick-modal').style.display='none';
+  ra();
+}
+
+function closePoiColorPicker(){ const m=qs('#cpick-modal'); if(m) m.style.display='none'; }
+
+function openDayAssignModal(poiId){
+  const p=S.pois.find(x=>x.id===poiId); if(!p) return;
+  const modal=qs('#dayassign-modal'); if(!modal) return;
+  qs('#dayassign-poi-id').value=poiId;
+  qs('#dayassign-poi-name').textContent=(CATS[p.cat]||'📍')+' '+p.name;
+  qs('#dayassign-list').innerHTML=S.days.map((d,di)=>{
+    const checked=(p.dayIds||[]).includes(d.id);
+    const c=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
+    const fd=fmtDate(d.date);
+    return '<label class="dayassign-row">'
+      +'<input type="checkbox" '+(checked?'checked':'')+' style="accent-color:'+c+';cursor:pointer;width:16px;height:16px;" onchange="quickTogglePOIDay('+poiId+','+d.id+',this.checked)">'
+      +'<span class="dayassign-dot" style="background:'+c+';"></span>'
+      +'<span class="dayassign-name">'+esc(d.title)+(fd?' <span style="color:var(--muted2);font-size:.6rem;">'+fd+'</span>':'')+'</span>'
+      +'</label>';
+  }).join('');
+  modal.style.display='flex';
+}
+
+function closeDayAssignModal(){ const m=qs('#dayassign-modal'); if(m) m.style.display='none'; }
 function toggleLock(id){ const p=S.pois.find(x=>x.id===id); if(!p) return; p.locked=!p.locked; p.marker.dragging[p.locked?'disable':'enable'](); p.marker.closePopup(); toast(p.locked?'🔒 Locked':'🔓 Unlocked',''); }
 function editPOI(id){
   const p=S.pois.find(x=>x.id===id); if(!p) return;
@@ -225,7 +257,7 @@ function toggleDayCollapse(id){
   if(card){
     card.classList.toggle('dayc--collapsed',!!S.dayCollapsed[id]);
     const btn=card.querySelector('.day-collapse-btn');
-    if(btn) btn.textContent=S.dayCollapsed[id]?'▶':'▼';
+    if(btn) btn.textContent=S.dayCollapsed[id]?'+':'−';
   }
 }
 function setAllDaysCollapsed(v){
@@ -233,7 +265,7 @@ function setAllDaysCollapsed(v){
   qsa('.dayc').forEach(card=>{
     card.classList.toggle('dayc--collapsed',v);
     const btn=card.querySelector('.day-collapse-btn');
-    if(btn) btn.textContent=v?'▶':'▼';
+    if(btn) btn.textContent=v?'+':'−';
   });
 }
 function setDayColor(id, color){
@@ -293,6 +325,7 @@ function renderDays(){
     });
     if(eating>0) costRows.push({l:'🍽️ Eating'+(eatingOverridden?' (custom)':' (default)'),c:eating,s:''});
     const ghosts=getGhostItemsForDay(di);
+    const hasHotel=dpois.some(p=>isAccomCat(p.cat));
     let items='';
     if(!d.items.length && !ghosts.length) items='<div class="empty-day">Empty — assign POIs via ✏️ Edit</div>';
 
@@ -300,7 +333,7 @@ function renderDays(){
     ghosts.forEach(g=>{
       const p=S.pois.find(x=>x.id===g.poiId); if(!p) return;
       const gpc_=getPoiColor(p);
-      items+='<div class="day-item" style="opacity:.45;background:rgba(0,0,0,.04);border-style:dashed;cursor:default;" title="Starting point (from previous day)">'
+      items+='<div class="day-item day-item--hotel" style="opacity:.45;border-style:dashed;cursor:default;" title="Starting point (from previous day)">'
         +'<span style="font-size:.7rem;flex-shrink:0;">🔗</span>'
         +'<div class="dipin" style="background:'+gpc_+'22;color:'+gpc_+';">'+(CATS[p.cat]||'📍')+'</div>'
         +'<span class="diname" style="color:var(--muted);">'+esc(p.name)+' <span style="font-size:.58rem;">(carry-over)</span></span>'
@@ -313,23 +346,25 @@ function renderDays(){
       if(it.type==='poi'){
         const p=S.pois.find(x=>x.id===it.id); if(!p) return;
         const ipc_=getPoiColor(p);
-        items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="poi" data-iid="'+p.id+'">'
+        const isHotel=isAccomCat(p.cat);
+        const itemCls=isHotel?'day-item day-item--hotel':'day-item day-item--poi';
+        items+='<div class="'+itemCls+'" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="poi" data-iid="'+p.id+'">'
           +'<span class="di-grip">⋮⋮</span>'
           +'<div class="dipin" style="background:'+ipc_+'22;color:'+ipc_+';">'+(CATS[p.cat]||'📍')+'</div>'
           +'<span class="diname" ondblclick="editPOI('+p.id+')" onclick="focusPOI('+p.id+')">'+esc(p.name)+'</span>'
           +(poiCostForDay(p)?'<span class="di-cost">$'+poiCostForDay(p).toFixed(2)+'</span>':'')
-          +'<button class="btn bg bic bsm" onclick="editPOI('+p.id+')" title="Edit">✏️</button>'
-          +'<button class="btn bg bic bsm" onclick="focusPOI('+p.id+')">👁</button>'
+          +'<button class="btn bic bsm day-item-btn" onclick="editPOI('+p.id+')" title="Edit">✏️</button>'
+          +'<button class="btn bic bsm day-item-btn" onclick="focusPOI('+p.id+')">👁</button>'
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
       } else if(it.type==='route'){
         const r=S.routes.find(x=>x.id===it.id); if(!r) return;
         const tot=routeCost(r);
         const irc_=getRouteColor(r);
-        items+='<div class="day-item" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="route" data-iid="'+r.id+'" style="background:'+irc_+'11;border-color:'+irc_+'44;">'
+        items+='<div class="day-item day-item--route" draggable="true" data-did="'+d.id+'" data-idx="'+idx+'" data-itype="route" data-iid="'+r.id+'">'
           +'<span class="di-grip">⋮⋮</span><span style="flex-shrink:0;">'+(MI[r.mode]||'🛣️')+'</span>'
-          +'<span class="diname" style="color:'+irc_+';" onclick="(function(){var r2=S.routes.find(x=>x.id==='+r.id+');if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
+          +'<span class="diname day-item--route-name" onclick="(function(){var r2=S.routes.find(x=>x.id==='+r.id+');if(r2&&r2.poly){closeDrawerMobile();map.fitBounds(r2.poly.getBounds(),{padding:[50,50]});}})()">'+esc(r.fromName)+'→'+esc(r.toName)+' <span style="font-size:.61rem;">'+r.dist+'km</span></span>'
           +(tot?'<span class="di-cost">$'+tot.toFixed(2)+'</span>':'')
-          +'<button class="btn bg bic bsm" onclick="openRouteEdit('+r.id+')" title="Edit">✏️</button>'
+          +'<button class="btn bic bsm day-item-btn" onclick="openRouteEdit('+r.id+')" title="Edit">✏️</button>'
           +'<button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div>';
       } else if(it.type==='note'){
         items+='<div class="ndi"><div style="display:flex;align-items:flex-start;gap:5px;"><textarea rows="2" style="flex:1;" onchange="S.days.find(x=>x.id==='+d.id+').items['+idx+'].text=this.value">'+(it.text||'')+'</textarea><button class="btn br bic bsm" onclick="rmItem('+d.id+','+idx+')">✕</button></div></div>';
@@ -345,16 +380,22 @@ function renderDays(){
     const zoneColor=d.color||DAY_ZONE_COLORS[di%DAY_ZONE_COLORS.length];
     const eatPlaceholder=S.eatingDefault?'$'+S.eatingDefault+' (default)':'$0';
     const hidden=isDayHidden(d.id);
-    return '<div class="dayc'+(S.dayCollapsed[d.id]?' dayc--collapsed':'')+'" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
+    const collapsed=!!S.dayCollapsed[d.id];
+    const fdate=fmtDate(d.date);
+    const hotelWarn=!hasHotel?'<span class="day-hotel-warn" title="Pas d\'hôtel/hébergement pour ce jour">⚠️🏨</span>':'';
+    return '<div class="dayc'+(collapsed?' dayc--collapsed':'')+'" data-dcid="'+d.id+'"'+(hidden?' style="opacity:.45;"':'')+'>'
       +'<div class="dayh">'
       +'<div class="dayn-bubble" data-did="'+d.id+'" style="background:'+zoneColor+';cursor:pointer;" title="Click to change day color" onclick="qs(\'#dclr-'+d.id+'\').click()">'+(di+1)+'</div>'
       +'<input type="color" id="dclr-'+d.id+'" value="'+zoneColor+'" style="display:none;width:0;height:0;padding:0;border:0;" oninput="setDayColor('+d.id+',this.value)">'
+      +'<div class="dayh-titles">'
       +'<input class="dayti" value="'+esc(d.title)+'" onchange="updDay('+d.id+',\'title\',this.value)">'
-      +(di===0
-        ?'<input class="daydi" type="date"'+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value)">'
-        :'<span class="daydi-ro">'+(d.date||'')+'</span>'
-      )
-      +'<button class="btn bg bic bsm day-collapse-btn" onclick="toggleDayCollapse('+d.id+')" title="Collapse/expand" style="font-size:.7rem;">'+(S.dayCollapsed[d.id]?'▶':'▼')+'</button>'
+      +'<div class="daydi-wrap">'
+      +'<span class="daydi-label">'+(fdate||'📅 Set date')+'</span>'
+      +'<input class="daydi" type="date"'+(d.date?' value="'+d.date+'"':'')+' onchange="updDay('+d.id+',\'date\',this.value)" title="Edit date">'
+      +'</div>'
+      +'</div>'
+      +hotelWarn
+      +'<button class="day-collapse-btn" onclick="toggleDayCollapse('+d.id+')" title="'+(collapsed?'Expand':'Collapse')+'">'+(collapsed?'+':'−')+'</button>'
       +'<button class="btn bg bic bsm" onclick="setDayVisibility('+d.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show day':'Hide day')+'" style="font-size:.85rem;">'+(hidden?'👁‍🗨':'👁')+'</button>'
       +'<button class="btn br bic bsm" onclick="delDay('+d.id+')">✕</button></div>'
       +'<div class="dayst"><div class="daystat">📍 <b>'+dpois.length+'</b></div>'+(km?'<div class="daystat">🛣️ <b>'+km.toFixed(0)+'km</b></div>':'')+(dur?'<div class="daystat">⏱ <b>'+fmtD(dur)+'</b></div>':'')+(dc?'<div class="daystat gold">💰 <b>$'+dc.toFixed(2)+'</b></div>':'')+'</div>'

@@ -426,6 +426,34 @@
   <div class="mfoot"><button class="btn bg" id="re-cancel">Cancel</button><button class="btn bb" id="re-save">Recalculate &amp; Save</button></div>
 </div></div>
 
+<!-- Color Picker Modal -->
+<div id="cpick-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px);padding:13px;" onclick="if(event.target===this)closePoiColorPicker()">
+<div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:16px;width:100%;max-width:300px;box-shadow:var(--sh2);">
+  <h2 style="font-family:var(--head);font-weight:900;font-size:.9rem;margin-bottom:12px;">🎨 Couleur du POI</h2>
+  <input type="hidden" id="cpick-poi-id">
+  <div id="cpick-swatches" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;"></div>
+  <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">
+    <label style="font-size:.65rem;font-weight:700;color:var(--muted2);white-space:nowrap;">Hex&nbsp;:</label>
+    <input class="inp" id="cpick-hex" type="text" placeholder="#c94f14" style="flex:1;font-size:.72rem;" oninput="if(this.value.match(/^#[0-9a-fA-F]{6}$/)){setPoiColorFromPicker(+qs('#cpick-poi-id').value,this.value);}">
+  </div>
+  <div style="display:flex;gap:6px;justify-content:flex-end;">
+    <button class="btn bg" onclick="closePoiColorPicker()">Fermer</button>
+    <button class="btn bg bsm" onclick="(function(){const p=S.pois.find(x=>x.id===+qs('#cpick-poi-id').value);if(p){p.colorLocked=false;if(p.marker)p.marker.setIcon(mkPin(getPoiColor(p),CATS[p.cat]||'📍'));if(p.marker&&p.marker.getPopup()&&p.marker.getPopup().isOpen())p.marker.setPopupContent(popH(p));closePoiColorPicker();ra();}})()">↩ Auto</button>
+  </div>
+</div></div>
+
+<!-- Day Assignment Modal -->
+<div id="dayassign-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(3px);padding:13px;" onclick="if(event.target===this)closeDayAssignModal()">
+<div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:16px;width:100%;max-width:320px;box-shadow:var(--sh2);">
+  <h2 style="font-family:var(--head);font-weight:900;font-size:.9rem;margin-bottom:4px;">📅 Assigner aux jours</h2>
+  <div id="dayassign-poi-name" style="font-size:.72rem;color:var(--muted);margin-bottom:10px;"></div>
+  <input type="hidden" id="dayassign-poi-id">
+  <div id="dayassign-list" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;"></div>
+  <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+    <button class="btn bg" onclick="closeDayAssignModal()">Fermer</button>
+  </div>
+</div></div>
+
 <!-- Split Route Modal -->
 <div id="smbk" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:13px;">
 <div style="background:var(--surf);border:1px solid var(--border2);border-radius:var(--rl);padding:18px;width:100%;max-width:440px;max-height:92vh;overflow-y:auto;box-shadow:var(--sh2);">

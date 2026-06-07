@@ -118,3 +118,9 @@ const CATS={general:'📍',hotel:'🏨',camping:'⛺',restaurant:'🍽️',attra
 const RCOL={car:'#1d56d4',foot:'#15803d',bike:'#d4920a',manual:'#9333ea'};
 const MI={car:'🚗',foot:'🚶',bike:'🚲',manual:'✏️'};
 const PC={};
+
+function fmtDate(s){
+  if(!s) return '';
+  try{ const d=new Date(s+'T12:00:00'); return d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'}); }
+  catch(e){ return s; }
+}

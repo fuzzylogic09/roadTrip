@@ -225,21 +225,46 @@ textarea.inp{resize:vertical;min-height:50px;line-height:1.5;}
 .dayc{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:18px;overflow:hidden;box-shadow:var(--sh);}
 .dayc.dover{border-color:var(--acc2);background:rgba(212,146,10,.05);}
 .dayh{display:flex;align-items:center;gap:5px;padding:7px 10px;background:var(--surf3);border-bottom:1px solid var(--border);}
+.dayh-titles{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0;}
 .dayn-bubble{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--acc2);color:#fff;font-family:var(--head);font-weight:900;font-size:.72rem;flex-shrink:0;}
-.dayti{flex:1;background:transparent;border:none;color:var(--text);font-family:var(--font);font-size:.75rem;font-weight:700;outline:none;}
-.daydi{background:transparent;border:none;border-bottom:1px solid var(--border2);color:var(--muted);font-family:var(--font);font-size:.63rem;outline:none;width:88px;text-align:right;}
-.daydi:focus{border-color:var(--acc2);}
-.daydi-ro{color:var(--muted);font-family:var(--font);font-size:.63rem;flex-shrink:0;text-align:right;min-width:72px;}
+.dayti{width:100%;background:transparent;border:none;color:var(--text);font-family:var(--font);font-size:.75rem;font-weight:700;outline:none;}
+/* Date: show formatted label; clicking reveals the native date picker */
+.daydi-label{font-size:.58rem;color:var(--muted2);font-weight:600;cursor:pointer;border-bottom:1px dashed var(--border2);}
+.daydi-label:hover{color:var(--text);}
+/* The actual input is overlaid invisibly over the label */
+.daydi-wrap{position:relative;display:inline-flex;align-items:center;}
+.daydi{background:transparent;border:none;color:transparent;font-family:var(--font);font-size:.58rem;outline:none;position:absolute;inset:0;width:100%;opacity:0;cursor:pointer;}
+.daydi::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;}
 .dayc--collapsed .dayst,.dayc--collapsed .dayb{display:none;}
 .dayc--collapsed .dayh{border-bottom:none;}
+.day-collapse-btn{background:none;border:1px solid var(--border2);border-radius:6px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:1rem;font-weight:400;line-height:1;flex-shrink:0;transition:all .14s;padding:0;}
+.day-collapse-btn:hover{background:var(--surf);color:var(--text);}
+.day-hotel-warn{font-size:.8rem;flex-shrink:0;opacity:.75;cursor:default;}
 .dayst{display:flex;gap:6px;padding:3px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
 .daystat{font-size:.62rem;color:var(--muted);display:flex;align-items:center;gap:2px;}
 .daystat b{color:var(--text);font-weight:700;}
 .daystat.gold b{color:var(--gold);}
 .dayb{padding:5px;}
+/* Base day item */
 .day-item{background:var(--surf);border:1px solid var(--border);border-radius:var(--rs);padding:4px 7px;margin-bottom:3px;display:flex;align-items:center;gap:4px;cursor:grab;user-select:none;font-size:.71rem;}
 .day-item:hover{border-color:var(--border2);}
 .day-item.dragging{opacity:.3;border-style:dashed;}
+/* Route items — blue theme */
+.day-item--route{background:rgba(29,86,212,.05);border-color:rgba(29,86,212,.22);}
+.day-item--route .diname{color:var(--blue);}
+.day-item--route:hover{border-color:rgba(29,86,212,.45);}
+/* Hotel/camping items — warm amber theme */
+.day-item--hotel{background:rgba(212,146,10,.07);border-color:rgba(212,146,10,.28);}
+.day-item--hotel:hover{border-color:rgba(212,146,10,.5);}
+/* POI items — subtle green tint */
+.day-item--poi{background:rgba(21,128,61,.04);border-color:rgba(21,128,61,.16);}
+.day-item--poi:hover{border-color:rgba(21,128,61,.35);}
+/* Route item name color */
+.day-item--route-name{color:var(--blue);}
+/* Edit/eye button theming per item type */
+.day-item--route .day-item-btn{background:rgba(29,86,212,.09);border:1px solid rgba(29,86,212,.2);color:var(--blue);}
+.day-item--hotel .day-item-btn{background:rgba(212,146,10,.1);border:1px solid rgba(212,146,10,.25);}
+.day-item--poi .day-item-btn{background:rgba(21,128,61,.07);border:1px solid rgba(21,128,61,.18);}
 .dipin{width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;}
 .diname{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .di-cost{font-size:.62rem;font-weight:700;color:var(--gold);flex-shrink:0;}
@@ -378,6 +403,20 @@ body.drawer-pinned #gbadge{left:calc(var(--pw) + 50%);transform:translateX(-50%)
 
 /* Keyframes */
 @keyframes gpsr{0%{transform:scale(1);opacity:.65}100%{transform:scale(3);opacity:0}}
+
+/* ===== Color picker modal swatches ===== */
+.cpick-swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:3px solid transparent;transition:all .13s;}
+.cpick-swatch:hover{transform:scale(1.15);}
+.cpick-swatch.cpick-on{border-color:var(--text);transform:scale(1.2);}
+
+/* ===== Day assign modal ===== */
+.dayassign-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--rs);cursor:pointer;font-size:.73rem;transition:background .1s;}
+.dayassign-row:hover{background:var(--surf2);}
+.dayassign-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.dayassign-name{flex:1;}
+
+/* ===== Popup day row ===== */
+.pop-day-row{flex-wrap:wrap;}
 
 /* ===== Cost-type toggle in modal ===== */
 .cost-type-toggle{display:flex;border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-top:1px;}
