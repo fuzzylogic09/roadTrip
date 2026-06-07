@@ -153,29 +153,31 @@ function refreshDayZones(){
       if(isPoi) poiPts.push([lat,lng]);
       allPts.push([lat,lng]);
     }
+    function addRouteGeo(r){
+      [r.fromId,r.toId].forEach(pid=>{ const ep=S.pois.find(x=>x.id===pid); if(ep) addGeo(ep.lat,ep.lng,false); });
+      if(r.coords&&r.coords.length>1){
+        const step=Math.max(1,Math.floor(r.coords.length/60));
+        for(let i=0;i<r.coords.length;i+=step) addGeo(r.coords[i][0],r.coords[i][1],false);
+        addGeo(r.coords[r.coords.length-1][0],r.coords[r.coords.length-1][1],false);
+      }
+    }
 
     // Primary: POIs whose dayIds include this day
     S.pois.forEach(p=>{
       if((p.dayIds||[]).includes(d.id)) addGeo(p.lat,p.lng,true);
     });
 
-    // Routes in d.items
-    d.items.forEach(it=>{
-      if(it.type==='route'){
-        const r=S.routes.find(x=>x.id===it.id);
-        if(!r) return;
-        [r.fromId,r.toId].forEach(pid=>{
-          const ep=S.pois.find(x=>x.id===pid);
-          if(ep) addGeo(ep.lat,ep.lng,false);
-        });
-        if(r.coords&&r.coords.length>1){
-          const step=Math.max(1,Math.floor(r.coords.length/60));
-          for(let i=0;i<r.coords.length;i+=step) addGeo(r.coords[i][0],r.coords[i][1],false);
-          const last=r.coords[r.coords.length-1];
-          addGeo(last[0],last[1],false);
-        }
-      }
+    // Ghost accommodation POIs (hotel from previous day propagated into this day)
+    getGhostItemsForDay(di).forEach(g=>{
+      const p=S.pois.find(x=>x.id===g.poiId);
+      if(p) addGeo(p.lat,p.lng,true);
     });
+
+    // Routes assigned to this day (r.dayId is the authoritative source)
+    // Also fall back to d.items for routes that may lack dayId
+    const routeIds=new Set();
+    S.routes.filter(r=>r.dayId===d.id).forEach(r=>{ routeIds.add(r.id); addRouteGeo(r); });
+    d.items.forEach(it=>{ if(it.type==='route'&&!routeIds.has(it.id)){ const r=S.routes.find(x=>x.id===it.id); if(r) addRouteGeo(r); } });
 
     if(!allPts.length) return;
 
