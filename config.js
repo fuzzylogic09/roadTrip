@@ -96,7 +96,7 @@ function nid(){ return ++_id; }
 const S = {
   pois:[], routes:[], days:[],
   rtCol:'#1d56d4', rtCol2:'#1d56d4',
-  col:'#c94f14', editing:null, placing:false, pendLL:null,
+  col:'#c94f14', editing:null, placing:false, pendLL:null, routeDep:null,
   drawerWasOpen:false,
   gps:false, watchId:null, gposLL:null, gpsMk:null,
   sat:false, fcat:'all', editRid:null,

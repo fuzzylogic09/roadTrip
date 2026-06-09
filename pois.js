@@ -89,7 +89,9 @@ function popH(p){
     +'</div>'
     +'<div class="pop-photos"></div>'
     +'<div class="pr" style="font-size:.61rem;color:var(--muted);margin-top:2px;">'+p.lat.toFixed(5)+', '+p.lng.toFixed(5)+' · '+(p.locked?'🔒':'🔓')+'</div>'
-    +'<div class="pa"><button class="btn bg bsm" onclick="editPOI('+p.id+')">✏️ Edit</button>'
+    +'<div class="pa">'
+    +_routeDepBtn(p.id)
+    +'<button class="btn bg bsm" onclick="editPOI('+p.id+')">✏️ Edit</button>'
     +'<button class="btn bg bsm" onclick="toggleLock('+p.id+')">'+(p.locked?'🔓 Unlock':'🔒 Lock')+'</button>'
     +'<button class="btn br bsm" onclick="delPOI('+p.id+')">🗑</button></div>';
 }
@@ -162,6 +164,39 @@ function delPOI(id){
   ra(); toast('POI deleted','ok');
 }
 function focusPOI(id){ const p=S.pois.find(x=>x.id===id); if(!p) return; closeDrawerMobile(); map.flyTo([p.lat,p.lng],16,{duration:.7}); setTimeout(()=>p.marker.fire('click'),750); }
+
+function _routeDepBtn(pid){
+  if(!S.routeDep){
+    return '<button class="btn bg bsm" onclick="setRouteDep('+pid+')">🚀 Depart from here</button>';
+  } else if(S.routeDep===pid){
+    return '<button class="btn br bsm" onclick="setRouteDep(null)">✕ Cancel departure</button>';
+  } else {
+    const dep=S.pois.find(x=>x.id===S.routeDep);
+    const depName=dep?esc(dep.name):'?';
+    return '<button class="btn ba bsm" onclick="quickRoute('+S.routeDep+','+pid+')">🏁 Route from '+depName+'</button>';
+  }
+}
+function setRouteDep(pid){
+  S.routeDep=pid;
+  S.pois.forEach(p=>{ if(p.marker) p.marker.closePopup(); });
+  if(pid){
+    const p=S.pois.find(x=>x.id===pid);
+    toast('Departure: '+(p?p.name:'?')+'. Now click another POI to set arrival.','');
+  }
+}
+async function quickRoute(fromId,toId){
+  S.routeDep=null;
+  S.pois.forEach(p=>{ if(p.marker) p.marker.closePopup(); });
+  await calcRoute(fromId,toId,'car',null,null,0,0,false);
+  const rt=S.routes[S.routes.length-1];
+  if(rt){
+    openDrawer();
+    qsa('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab==='routes'));
+    qsa('.panel').forEach(p=>p.classList.toggle('on',p.id==='panel-routes'));
+    openRouteEdit(rt.id);
+    toast('Route created — assign a day and details below.','ok');
+  }
+}
 
 let _hideUnusedPOIs=false;
 function toggleHideUnusedPOIs(){
@@ -403,7 +438,7 @@ function renderDays(){
       +'</div>'
       +hotelWarn
       +'<button class="day-collapse-btn" onclick="toggleDayCollapse('+d.id+')" title="'+(collapsed?'Expand':'Collapse')+'">'+(collapsed?'+':'−')+'</button>'
-      +'<button class="btn bg bic bsm" onclick="setDayVisibility('+d.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show day':'Hide day')+'" style="font-size:.85rem;">'+(hidden?'👁‍🗨':'👁')+'</button>'
+      +'<button class="btn bg bic bsm" onclick="setDayVisibility('+d.id+','+(hidden?'true':'false')+')" title="'+(hidden?'Show day':'Hide day')+'" style="font-size:.85rem;">'+(hidden?'👁':'👁‍🗨')+'</button>'
       +'<button class="btn br bic bsm" onclick="delDay('+d.id+')">✕</button></div>'
       +'<div class="dayst"><div class="daystat">📍 <b>'+dpois.length+'</b></div>'+(km?'<div class="daystat">🛣️ <b>'+km.toFixed(0)+'km</b></div>':'')+(dur?'<div class="daystat">⏱ <b>'+fmtD(dur)+'</b></div>':'')+(dc?'<div class="daystat gold">💰 <b>$'+dc.toFixed(2)+'</b></div>':'')+'</div>'
       +'<div class="dayb">'+items+costSummary
